@@ -7,6 +7,8 @@ const readGit = (args) =>
     encoding: 'utf8',
   }).trim();
 
+const isRenameOrCopyStatus = (status) => status.startsWith('R') || status.startsWith('C');
+
 const hasIgnoredSuffix = (filePath) =>
   filePath.endsWith('.spec.ts') ||
   filePath.endsWith('.spec.tsx') ||
@@ -30,6 +32,22 @@ const isPackageAffectingFile = (filePath) => {
   return true;
 };
 
+const parseChangedFilePaths = (statusLine) => {
+  const [status, ...paths] = statusLine.split('\t');
+
+  if (!status) {
+    return [];
+  }
+
+  if (isRenameOrCopyStatus(status)) {
+    return paths.slice(0, 2);
+  }
+
+  return paths.slice(0, 1);
+};
+
+const toUniquePaths = (filePaths) => [...new Set(filePaths.filter(Boolean))];
+
 try {
   readGit(['rev-parse', '--verify', baseRef]);
 } catch {
@@ -39,15 +57,17 @@ try {
   process.exit(1);
 }
 
-const changedFiles = readGit([
+const changedStatusLines = readGit([
   'diff',
-  '--name-only',
-  '--diff-filter=ACMR',
+  '--name-status',
+  '--find-renames',
+  '--diff-filter=ACMRD',
   `${baseRef}...HEAD`,
 ])
   .split('\n')
   .filter(Boolean);
 
+const changedFiles = toUniquePaths(changedStatusLines.flatMap(parseChangedFilePaths));
 const packageAffectingFiles = changedFiles.filter(isPackageAffectingFile);
 
 if (packageAffectingFiles.length === 0) {

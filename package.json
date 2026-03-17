@@ -22,16 +22,22 @@
   "homepage": "https://github.com/iteraai/component-inspector#readme",
   "scripts": {
     "build": "turbo run build",
+    "changeset": "changeset",
+    "changeset:add": "changeset add",
+    "changeset:check": "node ./scripts/check-changeset-entry.mjs",
     "example:embedded": "npm run dev:embedded --workspace component-inspector-example-consumer",
     "example:host": "npm run dev:host --workspace component-inspector-example-consumer",
     "lint": "turbo run lint",
     "lint:ci": "turbo run lint:ci",
+    "release": "changeset publish",
     "test": "turbo run test",
     "test:examples": "npm run test --workspace component-inspector-example-consumer",
     "test:pack": "node ./scripts/validate-inspector-sdk-packages.mjs",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "version-packages": "changeset version"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.7",
     "turbo": "^2.4.0"
   }
 }

@@ -2,7 +2,8 @@
 
 Public monorepo for the Itera component inspector SDK packages. The current public implementation is the React client SDK packaged as `@iteraai/react-component-inspector`, alongside the shared protocol package `@iteraai/inspector-protocol`.
 
-The package names and import paths in this repo are the intended public contract. npm publishing automation lands in a later PR, so use this workspace or packed tarballs for rehearsal installs until the first public publish happens.
+The package names and import paths in this repo are the intended public contract. Releases are managed with
+Changesets and an automated GitHub Actions release PR flow so package changes land with explicit semver intent.
 
 ## Packages
 
@@ -12,6 +13,34 @@ The package names and import paths in this repo are the intended public contract
 | `@iteraai/react-component-inspector` | [`packages/react-component-inspector`](./packages/react-component-inspector) | Embedded React bridge, iteration inspector runtime, runtime telemetry helpers, and adapter/runtime configuration. |
 
 The repo is intentionally a monorepo so future packages such as `@iteraai/vue-component-inspector` can live beside the current React package without changing the release layout.
+
+## Release Workflow
+
+This repo uses a merge-driven release flow for the published `@iteraai/*` packages.
+
+1. Package-affecting PRs add a changeset with `npm run changeset:add`.
+2. Merging those PRs into `main` updates or opens an automated release PR with version and changelog changes.
+3. Merging the release PR publishes the changed packages from GitHub Actions with npm provenance enabled.
+
+Changesets are expected for shipped package code, exports, package metadata, and build configuration changes
+under `packages/`. They are not required for docs-only, examples-only, workflow-only, or package test-only
+changes.
+
+### First Publish Bootstrap
+
+The steady-state release path uses npm trusted publishing from GitHub Actions and does not depend on a
+long-lived publish token. There is one initial bootstrap caveat for this repository: npm trusted publishers are
+configured per existing package, and these package names do not exist on npm yet.
+
+For the first publish only, maintainers should either:
+
+- provide a short-lived `NPM_TOKEN` repository secret so the release workflow can create the package pages, then remove the secret immediately after the first release
+- or publish the first release manually from the release PR commit and configure trusted publishers before the next release
+
+After the package pages exist, configure npm trusted publishers for `@iteraai/inspector-protocol` and
+`@iteraai/react-component-inspector` to point at `iteraai/component-inspector` and
+`.github/workflows/release.yml`, then remove any bootstrap token path. Future releases should rely on trusted
+publishing only.
 
 ## Example Consumer
 

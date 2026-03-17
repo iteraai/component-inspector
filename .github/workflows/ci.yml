@@ -14,6 +14,28 @@ permissions:
   contents: read
 
 jobs:
+  changeset-intent:
+    if: github.event_name == 'pull_request'
+    name: changeset-intent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate semver intent
+        env:
+          CHANGESET_BASE_REF: origin/${{ github.base_ref }}
+        run: npm run changeset:check
+
   repo-checks:
     name: ${{ matrix.check.name }}
     runs-on: ubuntu-latest

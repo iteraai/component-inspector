@@ -38,7 +38,85 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Detect release publish trigger
+        id: release-trigger
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const eventName = process.env.GITHUB_EVENT_NAME;
+          const repository = process.env.GITHUB_REPOSITORY;
+          const sha = process.env.GITHUB_SHA;
+          const token = process.env.GITHUB_TOKEN;
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          const setOutput = (name, value) => {
+            fs.appendFileSync(outputPath, `${name}=${value}\n`);
+          };
+
+          const finish = (shouldPublish, reason) => {
+            console.log(reason);
+            setOutput('should_publish', shouldPublish ? 'true' : 'false');
+            setOutput('reason', reason.replace(/\n/g, ' '));
+          };
+
+          if (eventName !== 'push') {
+            finish(false, `Event ${eventName} does not publish packages.`);
+            process.exit(0);
+          }
+
+          const requestHeaders = {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+
+          const fetchAssociatedPulls = async () => {
+            const response = await fetch(
+              `https://api.github.com/repos/${repository}/commits/${sha}/pulls`,
+              {
+                headers: requestHeaders,
+              },
+            );
+
+            if (!response.ok) {
+              throw new Error(
+                `Unable to load pull requests for ${sha}: ${response.status} ${response.statusText}`,
+              );
+            }
+
+            return response.json();
+          };
+
+          (async () => {
+            const pulls = await fetchAssociatedPulls();
+            const mergedPull = pulls.find((pull) => pull.merged_at && pull.base?.ref === 'main');
+
+            if (!mergedPull) {
+              finish(false, `No merged PR associated with ${sha}.`);
+              return;
+            }
+
+            const isReleasePull =
+              mergedPull.head?.ref === 'changeset-release/main' ||
+              mergedPull.title === 'chore: release packages';
+
+            if (isReleasePull) {
+              finish(true, `Merged release PR #${mergedPull.number} detected.`);
+              return;
+            }
+
+            finish(false, `Merged PR #${mergedPull.number} is not a release PR.`);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
       - name: Configure bootstrap npm token
+        if: steps.release-trigger.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -48,12 +126,20 @@ jobs:
             echo "NPM_TOKEN not set; skipping bootstrap npm auth configuration."
           fi
 
-      - name: Create release PR or publish packages
+      - name: Create or update release PR
+        id: changesets
         uses: changesets/action@v1
         with:
           commit: "chore: release packages"
           title: "chore: release packages"
           version: npm run version-packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release packages
+        if: steps.release-trigger.outputs.should_publish == 'true' && steps.changesets.outputs.hasChangesets == 'false'
+        uses: changesets/action@v1
+        with:
           publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -5,7 +5,8 @@
   "license": "MIT",
   "packageManager": "npm@10.8.2",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "engines": {
     "node": ">=22.13.0 <23",
@@ -21,9 +22,12 @@
   "homepage": "https://github.com/iteraai/component-inspector#readme",
   "scripts": {
     "build": "turbo run build",
+    "example:embedded": "npm run dev:embedded --workspace component-inspector-example-consumer",
+    "example:host": "npm run dev:host --workspace component-inspector-example-consumer",
     "lint": "turbo run lint",
     "lint:ci": "turbo run lint:ci",
     "test": "turbo run test",
+    "test:examples": "npm run test --workspace component-inspector-example-consumer",
     "test:pack": "node ./scripts/validate-inspector-sdk-packages.mjs",
     "type-check": "turbo run type-check"
   },

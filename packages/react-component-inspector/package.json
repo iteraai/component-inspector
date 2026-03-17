@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/react-component-inspector",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "description": "Browser bridge and iteration runtime for the Itera React component inspector SDK.",
@@ -52,7 +52,7 @@
     "lint:ci": "eslint . --max-warnings=0"
   },
   "dependencies": {
-    "@iteraai/inspector-protocol": "0.0.0",
+    "@iteraai/inspector-protocol": "0.1.0",
     "react-devtools-inline": "^6.1.5"
   },
   "peerDependencies": {

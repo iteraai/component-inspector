@@ -1,0 +1,33 @@
+{
+  "name": "component-inspector",
+  "private": true,
+  "description": "Public monorepo for the Itera component inspector SDK packages.",
+  "license": "MIT",
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0 <23",
+    "npm": ">=10.8.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iteraai/component-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iteraai/component-inspector/issues"
+  },
+  "homepage": "https://github.com/iteraai/component-inspector#readme",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "lint:ci": "turbo run lint:ci",
+    "test": "turbo run test",
+    "test:pack": "node ./scripts/validate-inspector-sdk-packages.mjs",
+    "type-check": "turbo run type-check"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0"
+  }
+}

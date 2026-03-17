@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "#test/*": ["./testing/*"],
+      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"]
+    },
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src", "testing"]
+}

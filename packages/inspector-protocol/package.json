@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/inspector-protocol",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "description": "Protocol constants, message builders, and validators for the Itera component inspector SDK.",

@@ -14,8 +14,8 @@
     "lint:ci": "eslint . --max-warnings=0"
   },
   "dependencies": {
-    "@iteraai/inspector-protocol": "0.0.0",
-    "@iteraai/react-component-inspector": "0.0.0",
+    "@iteraai/inspector-protocol": "0.1.0",
+    "@iteraai/react-component-inspector": "0.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

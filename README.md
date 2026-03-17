@@ -13,6 +13,16 @@ The package names and import paths in this repo are the intended public contract
 
 The repo is intentionally a monorepo so future packages such as `@iteraai/vue-component-inspector` can live beside the current React package without changing the release layout.
 
+## Example Consumer
+
+The repo also carries a focused customer-style fixture workspace:
+
+| Workspace                              | Path                                                                                               | Role                                                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `component-inspector-example-consumer` | [`examples/component-inspector-example-consumer`](./examples/component-inspector-example-consumer) | Host/embed harness that imports the public package names and smoke-tests handshake, tree, props, and iteration selection. |
+
+This example workspace exists to prove customer-style consumption against the built package entrypoints. Its Vitest smoke coverage asserts that imports resolve to `dist/`, not `src/`.
+
 ## Hosted Editor Architecture
 
 Customer apps integrate with the hosted Itera editor through browser `postMessage` channels. This repo contains the SDK used by the embedded app side of that flow; it does not publish the first-party editor application itself.
@@ -57,6 +67,8 @@ Those strings are not accidental internal details. They are the preserved contra
 ## Monorepo Layout
 
 ```text
+examples/
+  component-inspector-example-consumer/
 packages/
   inspector-protocol/
   react-component-inspector/
@@ -116,6 +128,14 @@ Useful package-scoped commands:
 npm run test --workspace @iteraai/inspector-protocol
 npm run test --workspace @iteraai/react-component-inspector
 npm run lint:ci --workspace @iteraai/react-component-inspector
+npm run test:examples
 ```
 
 `npm run test:pack` validates the built package shape in a clean smoke fixture so the documented import paths stay aligned with the tarballs customers will eventually install.
+
+To inspect the example host/embed flow manually after building the SDK packages:
+
+```bash
+npm run example:host
+npm run example:embedded
+```

@@ -98,6 +98,11 @@ type HandleHostMessageCallbacks = {
   onReady?: (connection: HostReadyConnection) => void;
 };
 
+type SecureHostMessageAuthorizationFailure =
+  | 'handshake-required'
+  | 'source-mismatch'
+  | 'session-mismatch';
+
 const PREVIEW_PATH_CHANNEL = 'itera-preview-path';
 const PREVIEW_PATH_UPDATED_TYPE = 'PATH_UPDATED';
 
@@ -222,6 +227,18 @@ type SessionTokenValidationFailure = Exclude<
   { ok: true }
 >;
 
+const secureHostMessageAuthorizationFailureDetails: Record<
+  SecureHostMessageAuthorizationFailure,
+  string
+> = {
+  'handshake-required':
+    'Secure HELLO handshake is required before processing inspector commands.',
+  'source-mismatch':
+    'Secure inspector session is bound to a different message source.',
+  'session-mismatch':
+    'Secure inspector session does not match the message sessionId.',
+};
+
 const postUnauthorizedSessionError = (
   event: MessageEvent,
   options: InitInspectorBridgeOptions,
@@ -269,6 +286,74 @@ const postUnauthorizedSessionError = (
       {
         requestId,
         sessionId,
+      },
+    ),
+  );
+};
+
+const resolveSecureHostMessageAuthorizationFailure = (
+  event: MessageEvent,
+  authorizedConnection: HostReadyConnection | undefined,
+  sessionId?: string,
+): SecureHostMessageAuthorizationFailure | undefined => {
+  if (authorizedConnection === undefined) {
+    return 'handshake-required';
+  }
+
+  if (
+    authorizedConnection.target !== event.source ||
+    authorizedConnection.origin !== event.origin
+  ) {
+    return 'source-mismatch';
+  }
+
+  if (authorizedConnection.sessionId !== sessionId) {
+    return 'session-mismatch';
+  }
+
+  return undefined;
+};
+
+const postUnauthorizedSecureMessageError = (
+  event: MessageEvent,
+  options: InitInspectorBridgeOptions,
+  failureReason: SecureHostMessageAuthorizationFailure,
+  messageContext: ReturnType<typeof readMessageContext>,
+) => {
+  const unauthorizedSessionError = createInspectorProtocolError(
+    'ERR_UNAUTHORIZED_SESSION',
+    secureHostMessageAuthorizationFailureDetails[failureReason],
+  );
+
+  emitEmbeddedInspectorSecurityRejectionEvent({
+    reasonCode: 'security-policy-rejected',
+    messageType: messageContext.type,
+    requestId: messageContext.requestId,
+    sessionId: messageContext.sessionId,
+    errorCode: unauthorizedSessionError.code,
+  });
+  emitRejectionLifecycleTelemetry(
+    options,
+    'token-reject',
+    messageContext,
+    unauthorizedSessionError.code,
+  );
+
+  postToTarget(
+    event.source,
+    event.origin,
+    buildMessage(
+      'ERROR',
+      {
+        code: unauthorizedSessionError.code,
+        message: unauthorizedSessionError.message,
+        details: {
+          reason: failureReason,
+        },
+      },
+      {
+        requestId: messageContext.requestId,
+        sessionId: messageContext.sessionId,
       },
     ),
   );
@@ -554,6 +639,7 @@ const handleHostMessage = (
   options: InitInspectorBridgeOptions,
   highlightElement: (element: Element) => void,
   clearHighlight: () => void,
+  authorizedConnection?: HostReadyConnection,
   callbacks?: HandleHostMessageCallbacks,
 ) => {
   const parsed = parseMessage(event.data, {
@@ -589,7 +675,7 @@ const handleHostMessage = (
     if (options.security?.enabled === true) {
       const tokenValidationResult = (
         options.security.tokenValidator ?? validateHelloSessionToken
-      )(parsed.message.payload.auth);
+      )(parsed.message.payload?.auth);
 
       if (!tokenValidationResult.ok) {
         postUnauthorizedSessionError(
@@ -629,6 +715,30 @@ const handleHostMessage = (
       sessionId: responseOptions.sessionId,
     });
     return;
+  }
+
+  if (options.security?.enabled === true) {
+    const messageContext = {
+      type: parsed.message.type,
+      requestId: responseOptions.requestId,
+      sessionId: responseOptions.sessionId,
+    };
+    const authorizationFailure =
+      resolveSecureHostMessageAuthorizationFailure(
+        event,
+        authorizedConnection,
+        responseOptions.sessionId,
+      );
+
+    if (authorizationFailure !== undefined) {
+      postUnauthorizedSecureMessageError(
+        event,
+        options,
+        authorizationFailure,
+        messageContext,
+      );
+      return;
+    }
   }
 
   if (parsed.message.type === 'PING') {
@@ -967,6 +1077,7 @@ export const initInspectorBridge = (
       resolvedOptions,
       highlighter.highlightElement,
       highlighter.clearHighlight,
+      hostReadyConnection,
       {
         onReady: (connection) => {
           hostReadyConnection = connection;

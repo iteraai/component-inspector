@@ -35,6 +35,7 @@ type MockFiber = {
 type BridgeContext = {
   hostOrigin: string;
   source: SourceDouble;
+  alternateSource: SourceDouble;
   options?: InitInspectorBridgeOptions;
   helloAuthPayload?: HelloAuthPayload;
   treeSnapshot: ReactTreeSnapshot;
@@ -66,12 +67,17 @@ const windowRefWithDevtoolsHook = window as Window & {
   __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown;
 };
 
+const createSourceDouble = (): SourceDouble => {
+  return {
+    postMessage: vi.fn(),
+  };
+};
+
 const contextCreated = (): BridgeContext => {
   return {
     hostOrigin: 'https://app.iteraapp.com',
-    source: {
-      postMessage: vi.fn(),
-    },
+    source: createSourceDouble(),
+    alternateSource: createSourceDouble(),
     treeSnapshot: {
       nodes: [
         {
@@ -1012,6 +1018,26 @@ const hostSendsHelloWithConfiguredAuth = (
   return context;
 };
 
+const hostSendsHelloWithUndefinedPayloadInSecureMode = (
+  context: BridgeContext,
+): BridgeContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: context.hostOrigin,
+      source: context.source as unknown as MessageEventSource,
+      data: {
+        channel: 'itera-component-inspector',
+        version: 1,
+        type: 'HELLO',
+        requestId: 'request-secure-hello-missing-payload',
+        sessionId: 'session-secure-hello-missing-payload',
+      },
+    }),
+  );
+
+  return context;
+};
+
 const hostSendsPing = (context: BridgeContext): BridgeContext => {
   window.dispatchEvent(
     new MessageEvent('message', {
@@ -1020,6 +1046,52 @@ const hostSendsPing = (context: BridgeContext): BridgeContext => {
       data: buildMessage('PING', {
         sentAt: 101,
       }),
+    }),
+  );
+
+  return context;
+};
+
+const hostSendsRequestTreeWithSecureHelloSession = (
+  context: BridgeContext,
+): BridgeContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: context.hostOrigin,
+      source: context.source as unknown as MessageEventSource,
+      data: buildMessage(
+        'REQUEST_TREE',
+        {
+          includeSource: true,
+        },
+        {
+          requestId: 'request-secure-tree',
+          sessionId: 'session-secure-hello',
+        },
+      ),
+    }),
+  );
+
+  return context;
+};
+
+const alternateHostSendsRequestTreeWithSecureHelloSession = (
+  context: BridgeContext,
+): BridgeContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: context.hostOrigin,
+      source: context.alternateSource as unknown as MessageEventSource,
+      data: buildMessage(
+        'REQUEST_TREE',
+        {
+          includeSource: true,
+        },
+        {
+          requestId: 'request-secure-tree-alt-source',
+          sessionId: 'session-secure-hello',
+        },
+      ),
     }),
   );
 
@@ -1724,6 +1796,129 @@ const expectUnauthorizedSessionErrorForExpiredAuth = (
   context: BridgeContext,
 ) => {
   return expectUnauthorizedSessionErrorResponse(context, 'expired-token');
+};
+
+const expectUnauthorizedSessionErrorWithDetails = (
+  source: SourceDouble,
+  hostOrigin: string,
+  options: {
+    requestId?: string;
+    sessionId?: string;
+    reason:
+      | 'handshake-required'
+      | 'source-mismatch'
+      | 'session-mismatch'
+      | 'missing-auth';
+  },
+) => {
+  expect(source.postMessage.mock.calls.length).toBeGreaterThan(0);
+
+  const [message, origin] =
+    source.postMessage.mock.calls[source.postMessage.mock.calls.length - 1];
+
+  expect(origin).toBe(hostOrigin);
+  expect(message).toMatchObject({
+    type: 'ERROR',
+    ...(options.requestId !== undefined && {
+      requestId: options.requestId,
+    }),
+    ...(options.sessionId !== undefined && {
+      sessionId: options.sessionId,
+    }),
+    payload: {
+      code: 'ERR_UNAUTHORIZED_SESSION',
+      details: {
+        reason: options.reason,
+      },
+    },
+  });
+};
+
+const expectUnauthorizedRequestTreeBeforeSecureHello = (
+  context: BridgeContext,
+) => {
+  expectUnauthorizedSessionErrorWithDetails(context.source, context.hostOrigin, {
+    requestId: 'request-42',
+    sessionId: 'session-42',
+    reason: 'handshake-required',
+  });
+
+  return context;
+};
+
+const expectUnauthorizedPingBeforeSecureHello = (context: BridgeContext) => {
+  expectUnauthorizedSessionErrorWithDetails(context.source, context.hostOrigin, {
+    reason: 'handshake-required',
+  });
+
+  return context;
+};
+
+const expectUnauthorizedRequestTreeForSecureSessionMismatch = (
+  context: BridgeContext,
+) => {
+  expectUnauthorizedSessionErrorWithDetails(context.source, context.hostOrigin, {
+    requestId: 'request-42',
+    sessionId: 'session-42',
+    reason: 'session-mismatch',
+  });
+
+  return context;
+};
+
+const expectUnauthorizedRequestTreeFromAlternateSource = (
+  context: BridgeContext,
+) => {
+  expect(context.source.postMessage).toHaveBeenCalledTimes(2);
+  expect(context.alternateSource.postMessage).toHaveBeenCalledTimes(1);
+
+  expectUnauthorizedSessionErrorWithDetails(
+    context.alternateSource,
+    context.hostOrigin,
+    {
+      requestId: 'request-secure-tree-alt-source',
+      sessionId: 'session-secure-hello',
+      reason: 'source-mismatch',
+    },
+  );
+
+  return context;
+};
+
+const expectSecureTreeSnapshotResponseAfterAuthorizedHello = (
+  context: BridgeContext,
+) => {
+  const inspectorCalls = readInspectorPostMessageCalls(context);
+
+  expect(inspectorCalls).toHaveLength(2);
+  expect(inspectorCalls[0]?.[0]).toMatchObject({
+    type: 'READY',
+    requestId: 'request-secure-hello',
+    sessionId: 'session-secure-hello',
+  });
+  expect(inspectorCalls[1]?.[0]).toMatchObject({
+    type: 'TREE_SNAPSHOT',
+    requestId: 'request-secure-tree',
+    sessionId: 'session-secure-hello',
+    payload: {
+      nodes: context.treeSnapshot.nodes,
+      rootIds: context.treeSnapshot.rootIds,
+    },
+  });
+
+  return context;
+};
+
+const expectUnauthorizedSessionErrorForMissingHelloPayload = (
+  context: BridgeContext,
+) => {
+  expectUnauthorizedSessionErrorWithDetails(context.source, context.hostOrigin, {
+    requestId: 'request-secure-hello-missing-payload',
+    sessionId: 'session-secure-hello-missing-payload',
+    reason: 'missing-auth',
+  });
+
+  return context;
 };
 
 const expectOversizeMessageErrorResponse = (context: BridgeContext) => {
@@ -2969,6 +3164,13 @@ describe('bridgeRuntime', () => {
       .then(expectUnauthorizedSessionErrorForMissingAuth);
   });
 
+  test('responds with ERR_UNAUTHORIZED_SESSION in secure mode when HELLO payload is omitted', () => {
+    return given(contextCreated())
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsHelloWithUndefinedPayloadInSecureMode)
+      .then(expectUnauthorizedSessionErrorForMissingHelloPayload);
+  });
+
   test('emits token rejection telemetry when secure HELLO auth is missing', () => {
     return given(contextCreated())
       .when(bridgeTelemetryConfigured)
@@ -3000,6 +3202,47 @@ describe('bridgeRuntime', () => {
       .when(bridgeInitializedWithSecureTokenValidation)
       .when(hostSendsHelloWithConfiguredAuth)
       .then(expectUnauthorizedSessionErrorForExpiredAuth);
+  });
+
+  test('rejects REQUEST_TREE in secure mode before HELLO is authorized', () => {
+    return given(contextCreated())
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsRequestTree)
+      .then(expectUnauthorizedRequestTreeBeforeSecureHello);
+  });
+
+  test('rejects PING in secure mode before HELLO is authorized', () => {
+    return given(contextCreated())
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsPing)
+      .then(expectUnauthorizedPingBeforeSecureHello);
+  });
+
+  test('responds with TREE_SNAPSHOT in secure mode after HELLO from the authorized sender and session', () => {
+    return given(contextCreated())
+      .when(helloAuthTokenSetAsValid)
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsHelloWithConfiguredAuth)
+      .when(hostSendsRequestTreeWithSecureHelloSession)
+      .then(expectSecureTreeSnapshotResponseAfterAuthorizedHello);
+  });
+
+  test('rejects REQUEST_TREE in secure mode when sessionId does not match the authorized HELLO session', () => {
+    return given(contextCreated())
+      .when(helloAuthTokenSetAsValid)
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsHelloWithConfiguredAuth)
+      .when(hostSendsRequestTree)
+      .then(expectUnauthorizedRequestTreeForSecureSessionMismatch);
+  });
+
+  test('rejects REQUEST_TREE in secure mode when a different same-origin sender tries to reuse the authorized session', () => {
+    return given(contextCreated())
+      .when(helloAuthTokenSetAsValid)
+      .when(bridgeInitializedWithSecureTokenValidation)
+      .when(hostSendsHelloWithConfiguredAuth)
+      .when(alternateHostSendsRequestTreeWithSecureHelloSession)
+      .then(expectUnauthorizedRequestTreeFromAlternateSource);
   });
 
   test('responds with PONG when receiving PING', () => {

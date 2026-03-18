@@ -53,7 +53,7 @@ Embedded-to-host message types:
 - `PONG`
 - `ERROR`
 
-The branded channel name and placeholder discriminator are preserved intentionally for compatibility with the current `Web` integration.
+The branded channel name and placeholder discriminator are part of the public protocol contract and should remain stable unless introduced as a breaking change.
 
 ## Quick Start
 

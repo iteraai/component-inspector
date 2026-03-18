@@ -1,6 +1,6 @@
 # component-inspector
 
-Public monorepo for the Itera component inspector SDK packages. The current public implementation is the React client SDK packaged as `@iteraai/react-component-inspector`, alongside the shared protocol package `@iteraai/inspector-protocol`.
+Public monorepo for the Itera component inspector SDK packages. It currently includes the React client SDK packaged as `@iteraai/react-component-inspector`, alongside the shared protocol package `@iteraai/inspector-protocol`.
 
 The package names and import paths in this repo are the intended public contract. Releases are managed with
 Changesets and an automated GitHub Actions release PR flow so package changes land with explicit semver intent.
@@ -76,22 +76,22 @@ At a high level:
 
 The current supported customer runtime is a browser-based React app embedded in the hosted editor flow.
 
-- `@iteraai/react-component-inspector` is the current public implementation. This rollout does not genericize the SDK beyond that.
+- `@iteraai/react-component-inspector` is the React SDK package published from this repo today.
 - React peer dependency support is `^18.3.0 || ^19.0.0`.
 - Exported adapter targets are `auto`, `vite`, `next`, `cra`, and `fiber`.
 - The documented embedded bootstrap helpers currently initialize the bridge with `runtimeConfig: { adapter: 'fiber' }`.
 - Future platform packages should be added under `packages/` instead of split into separate repositories.
 
-## Preserved Contract Identifiers
+## Contract Identifiers
 
-These branded identifiers are documented intentionally and should be treated as part of the supported SDK contract for this rollout:
+These branded identifiers are documented intentionally and should be treated as part of the supported SDK contract:
 
 - Inspector channel: `itera-component-inspector`
 - Iteration runtime channel: `itera:iteration-inspector`
 - Preview-path channel: `itera-preview-path`
 - Serializable placeholder discriminator: `__iteraType`
 
-Those strings are not accidental internal details. They are the preserved contract carried forward from the existing `Web` implementation.
+Those strings are part of the public integration surface and should not be renamed without an intentional breaking change.
 
 ## Monorepo Layout
 
@@ -109,28 +109,6 @@ Package-specific integration details live in:
 
 - [`packages/inspector-protocol/README.md`](./packages/inspector-protocol/README.md)
 - [`packages/react-component-inspector/README.md`](./packages/react-component-inspector/README.md)
-
-## Migration From `Web`
-
-Internal `Web` consumers should migrate from workspace source imports to the built package entrypoints below.
-
-| Old workspace import                                     | Published package import                                |
-| -------------------------------------------------------- | ------------------------------------------------------- |
-| `Web/libs/inspector-protocol/src`                        | `@iteraai/inspector-protocol`                           |
-| `Web/libs/inspector-protocol/src/types`                  | `@iteraai/inspector-protocol/types`                     |
-| `Web/libs/inspector-protocol/src/errors`                 | `@iteraai/inspector-protocol/errors`                    |
-| `Web/libs/inspector-protocol/src/validators`             | `@iteraai/inspector-protocol/validators`                |
-| `Web/libs/inspector-protocol/src/origins`                | `@iteraai/inspector-protocol/origins`                   |
-| `Web/libs/react-inspector-bridge/src`                    | `@iteraai/react-component-inspector`                    |
-| `Web/libs/react-inspector-bridge/src/embeddedBootstrap`  | `@iteraai/react-component-inspector/embeddedBootstrap`  |
-| `Web/libs/react-inspector-bridge/src/bridgeRuntime`      | `@iteraai/react-component-inspector/bridgeRuntime`      |
-| `Web/libs/react-inspector-bridge/src/iterationInspector` | `@iteraai/react-component-inspector/iterationInspector` |
-
-Migration notes:
-
-- Stop importing raw `src/*.ts` files from workspace packages. The supported consumer contract is the built package entrypoints above.
-- Keep the preserved channel/runtime identifiers exactly as they are today. Do not rename `itera-component-inspector`, `itera:iteration-inspector`, `itera-preview-path`, or `__iteraType` during the cutover.
-- The current `Web/libs/react-inspector-bridge` implementation maps directly to `@iteraai/react-component-inspector`.
 
 ## Local Development
 

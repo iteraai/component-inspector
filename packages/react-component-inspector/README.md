@@ -2,7 +2,7 @@
 
 Browser bridge and iteration runtime for customer React apps embedded in the hosted Itera editor.
 
-This is the current public React implementation of the component inspector SDK. It preserves the existing bridge/runtime behavior from `Web/libs/react-inspector-bridge` and carries it forward under the package name `@iteraai/react-component-inspector`.
+This package provides the React implementation of the component inspector SDK for browser-based embedded apps.
 
 ## Installation
 
@@ -123,7 +123,7 @@ The exported runtime adapter targets are:
 Current guidance:
 
 - The customer-facing bootstrap helpers use `fiber` today.
-- Prefer `fiber` for parity with the preserved `Web` behavior unless you are intentionally wiring a custom adapter path.
+- Prefer `fiber` for the standard embedded bootstrap path unless you are intentionally wiring a custom adapter path.
 - `vite`, `next`, and `cra` remain exported adapter targets for direct runtime configuration and future expansion.
 
 ## Current Runtime Behavior

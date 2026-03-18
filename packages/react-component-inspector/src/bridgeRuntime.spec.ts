@@ -1804,11 +1804,7 @@ const expectUnauthorizedSessionErrorWithDetails = (
   options: {
     requestId?: string;
     sessionId?: string;
-    reason:
-      | 'handshake-required'
-      | 'source-mismatch'
-      | 'session-mismatch'
-      | 'missing-auth';
+    reason: 'handshake-required' | 'source-mismatch' | 'missing-auth';
   },
 ) => {
   expect(source.postMessage.mock.calls.length).toBeGreaterThan(0);
@@ -1854,18 +1850,6 @@ const expectUnauthorizedPingBeforeSecureHello = (context: BridgeContext) => {
   return context;
 };
 
-const expectUnauthorizedRequestTreeForSecureSessionMismatch = (
-  context: BridgeContext,
-) => {
-  expectUnauthorizedSessionErrorWithDetails(context.source, context.hostOrigin, {
-    requestId: 'request-42',
-    sessionId: 'session-42',
-    reason: 'session-mismatch',
-  });
-
-  return context;
-};
-
 const expectUnauthorizedRequestTreeFromAlternateSource = (
   context: BridgeContext,
 ) => {
@@ -1900,6 +1884,30 @@ const expectSecureTreeSnapshotResponseAfterAuthorizedHello = (
     type: 'TREE_SNAPSHOT',
     requestId: 'request-secure-tree',
     sessionId: 'session-secure-hello',
+    payload: {
+      nodes: context.treeSnapshot.nodes,
+      rootIds: context.treeSnapshot.rootIds,
+    },
+  });
+
+  return context;
+};
+
+const expectSecureTreeSnapshotResponseAfterAuthorizedHelloWithRotatedSessionId = (
+  context: BridgeContext,
+) => {
+  const inspectorCalls = readInspectorPostMessageCalls(context);
+
+  expect(inspectorCalls).toHaveLength(2);
+  expect(inspectorCalls[0]?.[0]).toMatchObject({
+    type: 'READY',
+    requestId: 'request-secure-hello',
+    sessionId: 'session-secure-hello',
+  });
+  expect(inspectorCalls[1]?.[0]).toMatchObject({
+    type: 'TREE_SNAPSHOT',
+    requestId: 'request-42',
+    sessionId: 'session-42',
     payload: {
       nodes: context.treeSnapshot.nodes,
       rootIds: context.treeSnapshot.rootIds,
@@ -3227,13 +3235,13 @@ describe('bridgeRuntime', () => {
       .then(expectSecureTreeSnapshotResponseAfterAuthorizedHello);
   });
 
-  test('rejects REQUEST_TREE in secure mode when sessionId does not match the authorized HELLO session', () => {
+  test('allows REQUEST_TREE in secure mode when sessionId differs from the authorized HELLO but sender and origin stay valid', () => {
     return given(contextCreated())
       .when(helloAuthTokenSetAsValid)
       .when(bridgeInitializedWithSecureTokenValidation)
       .when(hostSendsHelloWithConfiguredAuth)
       .when(hostSendsRequestTree)
-      .then(expectUnauthorizedRequestTreeForSecureSessionMismatch);
+      .then(expectSecureTreeSnapshotResponseAfterAuthorizedHelloWithRotatedSessionId);
   });
 
   test('rejects REQUEST_TREE in secure mode when a different same-origin sender tries to reuse the authorized session', () => {

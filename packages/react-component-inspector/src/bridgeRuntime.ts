@@ -100,8 +100,7 @@ type HandleHostMessageCallbacks = {
 
 type SecureHostMessageAuthorizationFailure =
   | 'handshake-required'
-  | 'source-mismatch'
-  | 'session-mismatch';
+  | 'source-mismatch';
 
 const PREVIEW_PATH_CHANNEL = 'itera-preview-path';
 const PREVIEW_PATH_UPDATED_TYPE = 'PATH_UPDATED';
@@ -235,8 +234,6 @@ const secureHostMessageAuthorizationFailureDetails: Record<
     'Secure HELLO handshake is required before processing inspector commands.',
   'source-mismatch':
     'Secure inspector session is bound to a different message source.',
-  'session-mismatch':
-    'Secure inspector session does not match the message sessionId.',
 };
 
 const postUnauthorizedSessionError = (
@@ -294,7 +291,6 @@ const postUnauthorizedSessionError = (
 const resolveSecureHostMessageAuthorizationFailure = (
   event: MessageEvent,
   authorizedConnection: HostReadyConnection | undefined,
-  sessionId?: string,
 ): SecureHostMessageAuthorizationFailure | undefined => {
   if (authorizedConnection === undefined) {
     return 'handshake-required';
@@ -305,10 +301,6 @@ const resolveSecureHostMessageAuthorizationFailure = (
     authorizedConnection.origin !== event.origin
   ) {
     return 'source-mismatch';
-  }
-
-  if (authorizedConnection.sessionId !== sessionId) {
-    return 'session-mismatch';
   }
 
   return undefined;
@@ -727,7 +719,6 @@ const handleHostMessage = (
       resolveSecureHostMessageAuthorizationFailure(
         event,
         authorizedConnection,
-        responseOptions.sessionId,
       );
 
     if (authorizationFailure !== undefined) {

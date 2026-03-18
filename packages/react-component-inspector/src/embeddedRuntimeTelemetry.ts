@@ -391,14 +391,35 @@ const invokeHook = <T>(
   }
 };
 
+const isConcreteTargetOrigin = (origin: string | undefined): origin is string => {
+  return (
+    typeof origin === 'string' &&
+    origin.length > 0 &&
+    origin !== '*' &&
+    origin !== 'null'
+  );
+};
+
 const toResolvedTargetOrigin = (
   rawTargetOrigin: string,
   referrer: string | undefined,
 ) => {
-  const baseUrl = referrer ?? 'http://localhost/';
+  const normalizedReferrer = referrer?.trim();
+  const normalizedTargetOrigin = rawTargetOrigin.trim();
+
+  if (!isConcreteTargetOrigin(normalizedTargetOrigin)) {
+    return undefined;
+  }
 
   try {
-    return new URL(rawTargetOrigin, baseUrl).origin;
+    const resolvedOrigin =
+      normalizedReferrer !== undefined && normalizedReferrer.length > 0
+        ? new URL(normalizedTargetOrigin, normalizedReferrer).origin
+        : new URL(normalizedTargetOrigin).origin;
+
+    return isConcreteTargetOrigin(resolvedOrigin)
+      ? resolvedOrigin
+      : undefined;
   } catch {
     return undefined;
   }
@@ -407,25 +428,22 @@ const toResolvedTargetOrigin = (
 export const resolveEmbeddedRuntimeTelemetryTargetOrigin = (
   targetOrigin?: string,
   referrer = readDocumentReferrer(),
-) => {
+): string | undefined => {
   const normalizedTargetOrigin = targetOrigin?.trim();
+  const normalizedReferrer = referrer?.trim();
 
   if (
     normalizedTargetOrigin !== undefined &&
     normalizedTargetOrigin.length > 0
   ) {
-    return toResolvedTargetOrigin(normalizedTargetOrigin, referrer) ?? '*';
+    return toResolvedTargetOrigin(normalizedTargetOrigin, normalizedReferrer);
   }
 
-  if (referrer === undefined || referrer.length === 0) {
-    return '*';
+  if (normalizedReferrer === undefined || normalizedReferrer.length === 0) {
+    return undefined;
   }
 
-  try {
-    return new URL(referrer).origin;
-  } catch {
-    return '*';
-  }
+  return toResolvedTargetOrigin(normalizedReferrer, undefined);
 };
 
 const toEmbeddedRuntimeTelemetryHostMessage = (
@@ -480,6 +498,10 @@ export const initEmbeddedRuntimeTelemetry = (
   const originalConsoleError = console.error;
 
   const postTelemetryToParent = (message: RuntimeTelemetryMessage) => {
+    if (resolvedTargetOrigin === undefined) {
+      return;
+    }
+
     const parentMessage = toEmbeddedRuntimeTelemetryHostMessage(message);
 
     try {

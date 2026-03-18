@@ -166,3 +166,4 @@ If you opt in through `runtimeTelemetry`, the embedded runtime can post telemetr
 - `unhandledrejection`
 
 Those messages are forwarded separately from the main inspector protocol and are intended for host/editor-side debugging and observability.
+Telemetry is only posted cross-window when a concrete `targetOrigin` can be resolved from `runtimeTelemetry.targetOrigin` or `document.referrer`; otherwise capture stays local and no parent `postMessage` is sent.

@@ -44,7 +44,7 @@
   },
   "scripts": {
     "build": "vite build",
-    "docs-drift:check": "tsc --project docs-fixtures/tsconfig.json --noEmit",
+    "docs-drift:check": "npm run docs-drift:react-component-inspector --prefix ../..",
     "prepack": "npm run build",
     "type-check": "tsc --noEmit",
     "test": "vitest run",

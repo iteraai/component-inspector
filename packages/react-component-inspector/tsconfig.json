@@ -4,9 +4,19 @@
     "baseUrl": ".",
     "paths": {
       "#test/*": ["./testing/*"],
-      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"]
+      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"],
+      "@iteraai/react-component-inspector": ["./src/index.ts"],
+      "@iteraai/react-component-inspector/bridgeRuntime": [
+        "./src/bridgeRuntime.ts"
+      ],
+      "@iteraai/react-component-inspector/embeddedBootstrap": [
+        "./src/embeddedBootstrap.ts"
+      ],
+      "@iteraai/react-component-inspector/iterationInspector": [
+        "./src/iterationInspector/index.ts"
+      ]
     },
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "testing"]
+  "include": ["src", "testing", "docs-fixtures"]
 }

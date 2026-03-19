@@ -49,6 +49,8 @@ jobs:
             command: npm run lint:ci
           - name: type-check
             command: npm run type-check
+          - name: docs-drift
+            command: npm run docs-drift:check
           - name: unit-test
             command: npm run test
           - name: build

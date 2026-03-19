@@ -2,8 +2,8 @@ import { bootstrapEmbeddedInspectorBridge } from '@iteraai/react-component-inspe
 import { bootIterationInspectorRuntime } from '@iteraai/react-component-inspector/iterationInspector';
 
 const documentedHostOrigins = [
-  'https://app.iteraapp.com',
-  'https://preview.iteraapp.com',
+  'https://app.iteradev.ai',
+  'https://preview.iteradev.ai',
 ] as const;
 
 export const bootstrapGenericReactInspector = () => {

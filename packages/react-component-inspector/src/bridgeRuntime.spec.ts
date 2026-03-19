@@ -75,7 +75,7 @@ const createSourceDouble = (): SourceDouble => {
 
 const contextCreated = (): BridgeContext => {
   return {
-    hostOrigin: 'https://app.iteraapp.com',
+    hostOrigin: 'https://app.iteradev.ai',
     source: createSourceDouble(),
     alternateSource: createSourceDouble(),
     treeSnapshot: {

@@ -45,7 +45,7 @@ const contextCreated = (): EmbeddedBootstrapContext => {
   return {
     options: {
       enabled: true,
-      hostOrigins: 'https://app.iteraapp.com, https://preview.iteraapp.com',
+      hostOrigins: 'https://app.iteradev.ai, https://preview.iteradev.ai',
     },
   };
 };
@@ -82,7 +82,7 @@ const explicitDevBootstrapOptionsConfigured = (
 ): EmbeddedBootstrapContext => {
   context.options = {
     enabled: false,
-    hostOrigins: 'https://explicit.iteraapp.com',
+    hostOrigins: 'https://explicit.iteradev.ai',
   };
 
   return context;
@@ -113,7 +113,7 @@ const hostOriginsConfiguredAsEmptyString = (
   context.options = {
     ...context.options,
     hostOrigins: '   ',
-    defaultHostOrigins: ['https://default.iteraapp.com'],
+    defaultHostOrigins: ['https://default.iteradev.ai'],
   };
 
   return context;
@@ -125,9 +125,9 @@ const hostOriginsConfiguredAsArrayWithWhitespace = (
   context.options = {
     ...context.options,
     hostOrigins: [
-      ' https://app.iteraapp.com ',
+      ' https://app.iteradev.ai ',
       '   ',
-      'https://preview.iteraapp.com ',
+      'https://preview.iteradev.ai ',
     ],
   };
 
@@ -157,7 +157,7 @@ const explicitDevCustomBridgeHooksConfigured = (
   context.lifecycleTelemetrySpy = vi.fn();
   context.options = {
     enabled: true,
-    hostOrigins: 'https://explicit.iteraapp.com',
+    hostOrigins: 'https://explicit.iteradev.ai',
     adapterFactory: context.adapterFactorySpy,
     telemetry: {
       onLifecycleMetric: context.lifecycleTelemetrySpy,
@@ -179,7 +179,7 @@ const expectInlineHookAndBridgeInitialization = (
     expect.any(Function),
   );
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://app.iteraapp.com', 'https://preview.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai', 'https://preview.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',
@@ -201,7 +201,7 @@ const expectInlineHookSkippedWhenKillSwitchActive = (
   expect(installDevtoolsInlineBackendHook).not.toHaveBeenCalled();
   expect(context.inlineMenuReadyHookOnSpy).not.toHaveBeenCalled();
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://app.iteraapp.com', 'https://preview.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai', 'https://preview.iteradev.ai'],
     enabled: true,
     killSwitchActive: true,
     mode: 'development',
@@ -219,7 +219,7 @@ const expectInlineHookSkippedWhenKillSwitchActive = (
 
 const expectDefaultHostOriginsUsed = (context: EmbeddedBootstrapContext) => {
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://default.iteraapp.com'],
+    hostOrigins: ['https://default.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',
@@ -245,7 +245,7 @@ const expectInitDevDefaultsApplied = (context: EmbeddedBootstrapContext) => {
     expect.any(Function),
   );
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://app.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',
@@ -267,7 +267,7 @@ const expectInitDevExplicitOptionsApplied = (
   expect(installDevtoolsInlineBackendHook).not.toHaveBeenCalled();
   expect(context.inlineMenuReadyHookOnSpy).not.toHaveBeenCalled();
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://explicit.iteraapp.com'],
+    hostOrigins: ['https://explicit.iteradev.ai'],
     enabled: false,
     killSwitchActive: false,
     mode: 'development',
@@ -287,7 +287,7 @@ const expectArrayHostOriginsTrimmedAndFiltered = (
   context: EmbeddedBootstrapContext,
 ) => {
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://app.iteraapp.com', 'https://preview.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai', 'https://preview.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',
@@ -307,7 +307,7 @@ const expectCustomBridgeHooksPassedThrough = (
   context: EmbeddedBootstrapContext,
 ) => {
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://app.iteraapp.com', 'https://preview.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai', 'https://preview.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',
@@ -328,7 +328,7 @@ const expectInitDevCustomBridgeHooksPassedThrough = (
   context: EmbeddedBootstrapContext,
 ) => {
   expect(initInspectorBridge).toHaveBeenCalledWith({
-    hostOrigins: ['https://explicit.iteraapp.com'],
+    hostOrigins: ['https://explicit.iteradev.ai'],
     enabled: true,
     killSwitchActive: false,
     mode: 'development',

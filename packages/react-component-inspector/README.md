@@ -36,7 +36,7 @@ import { bootIterationInspectorRuntime } from "@iteraai/react-component-inspecto
 
 const bridge = bootstrapEmbeddedInspectorBridge({
   enabled: true,
-  hostOrigins: ["https://app.iteraapp.com", "https://preview.iteraapp.com"],
+  hostOrigins: ["https://app.iteradev.ai", "https://preview.iteradev.ai"],
 });
 
 bootIterationInspectorRuntime();
@@ -58,7 +58,7 @@ For local development defaults, `initDevEmbeddedInspectorBridge()` is a thinner 
 
 - `enabled: true`
 - `killSwitchActive: false`
-- `hostOrigins: ['https://app.iteraapp.com']`
+- `hostOrigins: ['https://app.iteradev.ai']`
 - `runtimeConfig: { adapter: 'fiber' }`
 
 ## When To Use The Low-Level Bridge API
@@ -70,7 +70,7 @@ import { initInspectorBridge } from "@iteraai/react-component-inspector/bridgeRu
 
 const bridge = initInspectorBridge({
   enabled: true,
-  hostOrigins: ["https://app.iteraapp.com"],
+  hostOrigins: ["https://app.iteradev.ai"],
   mode: "development",
   runtimeConfig: {
     adapter: "fiber",

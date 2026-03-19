@@ -11,8 +11,8 @@ export const documentedViteRuntimeFallback: ReactInspectorRuntimeConfig = {
 };
 
 const documentedHostOrigins = [
-  'https://app.iteraapp.com',
-  'https://preview.iteraapp.com',
+  'https://app.iteradev.ai',
+  'https://preview.iteradev.ai',
 ] as const;
 
 export const mountViteInspectorEntrypoint = (rootElement: Element) => {

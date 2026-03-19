@@ -364,8 +364,8 @@ const validRequestNodePropsContext = (): ParseContext => {
       nodeId: 'node-42',
     }),
     options: {
-      sourceOrigin: 'https://app.iteraapp.com',
-      trustedOrigins: ['https://app.iteraapp.com'],
+      sourceOrigin: 'https://app.iteradev.ai',
+      trustedOrigins: ['https://app.iteradev.ai'],
     },
   };
 };
@@ -435,8 +435,8 @@ const originMismatchContext = (): ParseContext => {
       sentAt: 10,
     }),
     options: {
-      sourceOrigin: 'https://iteration-1.dev.iteraapp.com',
-      expectedOrigin: 'https://iteration-2.dev.iteraapp.com',
+      sourceOrigin: 'https://iteration-1.dev.iteradev.ai',
+      expectedOrigin: 'https://iteration-2.dev.iteradev.ai',
     },
   };
 };
@@ -447,8 +447,8 @@ const expectedOriginTrailingSlashContext = (): ParseContext => {
       sentAt: 20,
     }),
     options: {
-      sourceOrigin: 'https://iteration-1.dev.iteraapp.com',
-      expectedOrigin: 'https://iteration-1.dev.iteraapp.com/',
+      sourceOrigin: 'https://iteration-1.dev.iteradev.ai',
+      expectedOrigin: 'https://iteration-1.dev.iteradev.ai/',
     },
   };
 };

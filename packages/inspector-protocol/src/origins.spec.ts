@@ -14,20 +14,20 @@ type OriginContext = {
 const deriveOrigin = (_context: OriginContext): OriginContext => {
   return {
     value: deriveTargetOriginFromIframeSrc(
-      'https://iteration-123.dev.iteraapp.com/preview?session=1',
+      'https://iteration-123.dev.iteradev.ai/preview?session=1',
     ),
   };
 };
 
 const expectDerivedOrigin = (context: OriginContext) => {
-  expect(context.value).toBe('https://iteration-123.dev.iteraapp.com');
+  expect(context.value).toBe('https://iteration-123.dev.iteradev.ai');
 };
 
 const verifyTrustedOrigin = (_context: OriginContext): OriginContext => {
   return {
-    verdict: isOriginTrusted('https://app.iteraapp.com', [
-      'https://app.iteraapp.com',
-      'https://staging.iteraapp.com',
+    verdict: isOriginTrusted('https://app.iteradev.ai', [
+      'https://app.iteradev.ai',
+      'https://staging.iteradev.ai',
     ]),
   };
 };
@@ -39,8 +39,8 @@ const expectTrustedOrigin = (context: OriginContext) => {
 const verifyHostTargetMatch = (_context: OriginContext): OriginContext => {
   return {
     verdict: canHostSendToTargetOrigin(
-      'https://iteration-123.dev.iteraapp.com/editor',
-      'https://iteration-123.dev.iteraapp.com',
+      'https://iteration-123.dev.iteradev.ai/editor',
+      'https://iteration-123.dev.iteradev.ai',
     ),
   };
 };

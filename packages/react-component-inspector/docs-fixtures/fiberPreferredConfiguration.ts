@@ -29,7 +29,7 @@ export const bootstrapFiberPreferredInspector = () => {
 
   return bootstrapEmbeddedInspectorBridge({
     enabled: true,
-    hostOrigins: ['https://app.iteraapp.com'],
+    hostOrigins: ['https://app.iteradev.ai'],
     runtimeConfig: documentedFiberRuntimeConfig,
   });
 };

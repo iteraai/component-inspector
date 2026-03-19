@@ -39,25 +39,25 @@ describe('embeddedRuntimeTelemetry', () => {
   test('resolves explicit concrete target origins without a referrer', () => {
     expect(
       resolveEmbeddedRuntimeTelemetryTargetOrigin(
-        'https://editor.iteraapp.com/embed',
+        'https://editor.iteradev.ai/embed',
       ),
-    ).toBe('https://editor.iteraapp.com');
+    ).toBe('https://editor.iteradev.ai');
   });
 
   test('resolves relative target origins against a concrete referrer origin', () => {
     expect(
       resolveEmbeddedRuntimeTelemetryTargetOrigin(
         '/telemetry',
-        'https://editor.iteraapp.com/preview/frame',
+        'https://editor.iteradev.ai/preview/frame',
       ),
-    ).toBe('https://editor.iteraapp.com');
+    ).toBe('https://editor.iteradev.ai');
   });
 
   test('returns undefined when an explicit target origin is not concrete', () => {
     expect(
       resolveEmbeddedRuntimeTelemetryTargetOrigin(
         '*',
-        'https://editor.iteraapp.com/preview/frame',
+        'https://editor.iteradev.ai/preview/frame',
       ),
     ).toBeUndefined();
     expect(
@@ -119,7 +119,7 @@ describe('embeddedRuntimeTelemetry', () => {
 
     activeTelemetry = initEmbeddedRuntimeTelemetry({
       enabled: true,
-      targetOrigin: 'https://editor.iteraapp.com/embed',
+      targetOrigin: 'https://editor.iteradev.ai/embed',
       hooks: {
         onTelemetryPosted,
       },
@@ -127,7 +127,7 @@ describe('embeddedRuntimeTelemetry', () => {
 
     console.error('boom');
 
-    expectTelemetryPostedTo('https://editor.iteraapp.com', postMessageSpy);
+    expectTelemetryPostedTo('https://editor.iteradev.ai', postMessageSpy);
     expect(onTelemetryPosted).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: EMBEDDED_RUNTIME_TELEMETRY_CHANNEL,
@@ -136,7 +136,7 @@ describe('embeddedRuntimeTelemetry', () => {
   });
 
   test('posts telemetry when a concrete referrer-derived origin exists', () => {
-    setDocumentReferrer('https://preview.iteraapp.com/editor/frame');
+    setDocumentReferrer('https://preview.iteradev.ai/editor/frame');
 
     const postMessageSpy = vi
       .spyOn(window.parent, 'postMessage')
@@ -150,6 +150,6 @@ describe('embeddedRuntimeTelemetry', () => {
 
     console.error('boom');
 
-    expectTelemetryPostedTo('https://preview.iteraapp.com', postMessageSpy);
+    expectTelemetryPostedTo('https://preview.iteradev.ai', postMessageSpy);
   });
 });

@@ -25,6 +25,8 @@
     "changeset": "changeset",
     "changeset:add": "changeset add",
     "changeset:check": "node ./scripts/check-changeset-entry.mjs",
+    "docs-drift:check": "npm run docs-drift:react-component-inspector",
+    "docs-drift:react-component-inspector": "node ./scripts/validate-react-component-inspector-docs-drift.mjs",
     "example:embedded": "npm run dev:embedded --workspace component-inspector-example-consumer",
     "example:host": "npm run dev:host --workspace component-inspector-example-consumer",
     "lint": "turbo run lint",
@@ -38,6 +40,10 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "turbo": "^2.4.0"
   }
 }

@@ -4,6 +4,16 @@ Protocol constants, message builders, validators, origin helpers, and security e
 
 Use this package anywhere you need to speak the hosted editor protocol without pulling in the React runtime package: host/editor integrations, embedded message handlers, smoke fixtures, and protocol-aware tests.
 
+End-to-end customer integration guidance lives at [iteraai.github.io/docs](https://iteraai.github.io/docs/). Use this README for the protocol package surface, quick start, and the stable contract identifiers it exposes.
+
+## Documentation
+
+- [Docs home](https://iteraai.github.io/docs/)
+- [Getting Started](https://iteraai.github.io/docs/getting-started)
+- [Inspector Overview](https://iteraai.github.io/docs/inspector/)
+- [React Integration](https://iteraai.github.io/docs/inspector/react)
+- [Troubleshooting](https://iteraai.github.io/docs/inspector/troubleshooting)
+
 ## Installation
 
 ```bash
@@ -23,37 +33,6 @@ Before the first npm publish, use the workspace package or a packed tarball. The
 | `@iteraai/inspector-protocol/origins`    | Origin normalization and iframe target-origin helpers.                                               |
 
 The root entrypoint also exports the current security event constants used by the React bridge runtime.
-
-## Current Protocol Contract
-
-Protocol constants:
-
-- `INSPECTOR_CHANNEL` is `itera-component-inspector`
-- `INSPECTOR_PROTOCOL_VERSION` is `1`
-- Serializable placeholders use the `__iteraType` discriminator
-
-Host-to-embedded message types:
-
-- `HELLO`
-- `REQUEST_TREE`
-- `REQUEST_NODE_PROPS`
-- `REQUEST_SNAPSHOT`
-- `HIGHLIGHT_NODE`
-- `CLEAR_HIGHLIGHT`
-- `PING`
-
-Embedded-to-host message types:
-
-- `READY`
-- `TREE_SNAPSHOT`
-- `TREE_DELTA`
-- `NODE_PROPS`
-- `SNAPSHOT`
-- `NODE_SELECTED`
-- `PONG`
-- `ERROR`
-
-The branded channel name and placeholder discriminator are part of the public protocol contract and should remain stable unless introduced as a breaking change.
 
 ## Quick Start
 
@@ -106,32 +85,15 @@ window.addEventListener("message", (event) => {
 
 `requestId` and `sessionId` are envelope fields, not payload fields. The embedded bridge echoes them back in responses so the host can correlate request/response pairs.
 
-## Origin Requirements
+## Protocol Contract Snapshot
 
-The protocol package does not decide which origins are trusted for your app, but it gives you the helpers needed to enforce that contract consistently.
+- `INSPECTOR_CHANNEL` is `itera-component-inspector`.
+- `INSPECTOR_PROTOCOL_VERSION` is `1`.
+- Serializable placeholders use the `__iteraType` discriminator.
+- Host-to-embedded message types are `HELLO`, `REQUEST_TREE`, `REQUEST_NODE_PROPS`, `REQUEST_SNAPSHOT`, `HIGHLIGHT_NODE`, `CLEAR_HIGHLIGHT`, and `PING`.
+- Embedded-to-host message types are `READY`, `TREE_SNAPSHOT`, `TREE_DELTA`, `NODE_PROPS`, `SNAPSHOT`, `NODE_SELECTED`, `PONG`, and `ERROR`.
+- Pass `sourceOrigin` and `trustedOrigins` to `parseMessage` when you need exact trusted-origin validation for `postMessage`.
+- The secure handshake shape lives in `HELLO.payload.auth`, including `auth.sessionToken` and optional `auth.metadata`.
+- `serializablePlaceholderTypes`, `inspectorErrorCodes`, and the exported security event constants are part of the package's documented public surface.
 
-- Pass `sourceOrigin` and `trustedOrigins` to `parseMessage` when validating inbound messages from `postMessage`.
-- Trusted origins must match exact URL origins, including scheme and port.
-- Use `normalizeOrigin` when you start from a full URL and need the origin only.
-- Use `deriveTargetOriginFromIframeSrc` and `canHostSendToTargetOrigin` when the host needs to derive or verify the `postMessage` target origin for an iframe.
-
-If origin validation fails, `parseMessage` returns `ERR_INVALID_ORIGIN`.
-
-## Session Token Contract
-
-The protocol shape for secure handshakes is carried in `HELLO.payload.auth`.
-
-- `auth.sessionToken` is the required field used by secure embedded bridge integrations.
-- The current embedded bridge expects that token to be a non-empty string.
-- If `auth.metadata.expiresAt` is present and already expired, secure embedded bridges reject the handshake.
-- `metadata` fields such as `tokenType`, `issuer`, `audience`, `issuedAt`, `expiresAt`, and `nonce` are part of the public protocol shape.
-
-If you only need protocol parsing and message construction, this package does not enforce the token itself. Token validation happens in `@iteraai/react-component-inspector` when bridge security is enabled.
-
-## Placeholder And Error Behavior
-
-Customer-visible placeholder and error details are part of the protocol contract:
-
-- `serializablePlaceholderTypes` includes `redacted`, `dom-node`, `date`, `error`, `map`, `set`, and other non-JSON-native value markers.
-- `inspectorErrorCodes` includes origin, version, authorization, oversize-message, node-not-found, invalid-payload, and unknown-message-type failures.
-- `INSPECTOR_SECURITY_EVENT_NAME_MESSAGE_REJECTED` and related root exports document the current security event naming contract used by the bridge runtime.
+For embedded bridge startup, framework-specific entrypoints, and host-origin troubleshooting, use the docs pages linked above.

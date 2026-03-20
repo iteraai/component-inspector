@@ -5,6 +5,8 @@ repo. It imports `@iteraai/inspector-protocol` and
 `@iteraai/react-component-inspector` by their published names and expects those
 imports to resolve to built `dist/` entrypoints from the workspace packages.
 
+Customer-facing integration guidance lives at [iteraai.github.io/docs](https://iteraai.github.io/docs/), especially the [Inspector Overview](https://iteraai.github.io/docs/inspector/), [React Integration](https://iteraai.github.io/docs/inspector/react), and [Troubleshooting](https://iteraai.github.io/docs/inspector/troubleshooting) pages. This README stays focused on how to run and verify the fixture locally.
+
 ## What It Covers
 
 - Embedded bridge bootstrap against public package imports

@@ -1,5 +1,12 @@
 # @iteraai/react-component-inspector
 
+## 0.1.2
+
+### Patch Changes
+
+- 8f0fe7a: Add docs-drift guard fixtures and CI validation for the documented React, Next.js, Vite, and fiber-preferred inspector integration shapes.
+- 98c9c61: Update the embedded inspector host-origin defaults and published integration examples from `iteraapp.com` to `iteradev.ai`.
+
 ## 0.1.1
 
 ### Patch Changes

@@ -5,6 +5,18 @@ Public monorepo for the Itera component inspector SDK packages. It currently inc
 The package names and import paths in this repo are the intended public contract. Releases are managed with
 Changesets and an automated GitHub Actions release PR flow so package changes land with explicit semver intent.
 
+Detailed customer integration guidance now lives at [iteraai.github.io/docs](https://iteraai.github.io/docs/). Start with [Getting Started](https://iteraai.github.io/docs/getting-started) and the [Inspector Overview](https://iteraai.github.io/docs/inspector/). The README files in this repo stay focused on package summaries, quick starts, and local repository workflows for npm and GitHub readers.
+
+## Documentation
+
+- [Docs home](https://iteraai.github.io/docs/)
+- [Getting Started](https://iteraai.github.io/docs/getting-started)
+- [Inspector Overview](https://iteraai.github.io/docs/inspector/)
+- [React Integration](https://iteraai.github.io/docs/inspector/react)
+- [Next.js](https://iteraai.github.io/docs/inspector/nextjs)
+- [Vite-Style Apps](https://iteraai.github.io/docs/inspector/vite)
+- [Troubleshooting](https://iteraai.github.io/docs/inspector/troubleshooting)
+
 ## Packages
 
 | Package                              | Path                                                                         | Role                                                                                                              |
@@ -105,10 +117,12 @@ scripts/
   validate-inspector-sdk-packages.mjs
 ```
 
-Package-specific integration details live in:
+Package-level summaries live in:
 
 - [`packages/inspector-protocol/README.md`](./packages/inspector-protocol/README.md)
 - [`packages/react-component-inspector/README.md`](./packages/react-component-inspector/README.md)
+
+Use the docs site links above for the detailed customer integration story.
 
 ## Local Development
 

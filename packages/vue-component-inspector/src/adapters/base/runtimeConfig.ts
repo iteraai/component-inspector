@@ -10,7 +10,7 @@ import {
 
 export const defaultVueInspectorAdapterCapabilities: InspectorAdapterCapabilities =
   Object.freeze({
-    tree: false,
+    tree: true,
     props: false,
     highlight: false,
   });

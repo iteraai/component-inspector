@@ -1,16 +1,9 @@
+import { createVue3InspectorAdapter } from '../vue3';
 import { resolveVueInspectorRuntimeConfig } from './runtimeConfig';
 import type {
-  InspectorTreeSnapshot,
   VueInspectorAdapterContract,
   VueInspectorRuntimeConfig,
 } from './types';
-
-const createEmptyTreeSnapshot = (): InspectorTreeSnapshot => {
-  return {
-    nodes: [],
-    rootIds: [],
-  };
-};
 
 export const createVueInspectorAdapter = (
   runtimeConfig?: VueInspectorRuntimeConfig,
@@ -18,14 +11,20 @@ export const createVueInspectorAdapter = (
   const resolvedRuntimeConfig =
     resolveVueInspectorRuntimeConfig(runtimeConfig);
 
+  const getMountedApps = () => {
+    return resolvedRuntimeConfig.appRegistry.getMountedApps(
+      resolvedRuntimeConfig.mountedAppDiscovery,
+    );
+  };
+
+  const adapter = createVue3InspectorAdapter({
+    getMountedApps,
+  });
+
   return {
-    getMountedApps: () => {
-      return resolvedRuntimeConfig.appRegistry.getMountedApps(
-        resolvedRuntimeConfig.mountedAppDiscovery,
-      );
-    },
-    getTreeSnapshot: () => createEmptyTreeSnapshot(),
-    getNodeProps: () => undefined,
-    getDomElement: () => null,
+    getMountedApps,
+    getTreeSnapshot: () => adapter.getTreeSnapshot(),
+    getNodeProps: (nodeId: string) => adapter.getNodeProps(nodeId),
+    getDomElement: (nodeId: string) => adapter.getDomElement(nodeId),
   };
 };

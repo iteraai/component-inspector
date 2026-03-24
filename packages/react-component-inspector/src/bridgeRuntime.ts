@@ -916,6 +916,7 @@ export const initInspectorBridge = (
 
   const resolvedOptions = resolveInitOptions(options);
   const highlighter = createInspectorHighlighter();
+
   const resolveComponentPathForElement = (element: Element) => {
     return resolvedOptions.treeAdapter?.getComponentPathForElement?.(element);
   };

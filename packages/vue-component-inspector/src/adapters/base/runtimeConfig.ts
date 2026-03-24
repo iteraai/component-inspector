@@ -11,8 +11,8 @@ import {
 export const defaultVueInspectorAdapterCapabilities: InspectorAdapterCapabilities =
   Object.freeze({
     tree: true,
-    props: false,
-    highlight: false,
+    props: true,
+    highlight: true,
   });
 
 export const defaultVueMountedAppDiscovery: ResolvedVueMountedAppDiscoveryOptions =

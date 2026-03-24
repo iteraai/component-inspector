@@ -47,7 +47,7 @@ describe('resolveVueInspectorRuntimeConfig', () => {
       adapter: 'auto',
       capabilities: {
         tree: true,
-        props: false,
+        props: true,
         highlight: true,
       },
       appRegistry: defaultVueInspectorRuntimeConfig.appRegistry,
@@ -71,8 +71,8 @@ describe('resolveVueInspectorRuntimeConfig', () => {
       adapter: 'vue3',
       capabilities: {
         tree: true,
-        props: false,
-        highlight: false,
+        props: true,
+        highlight: true,
       },
       appRegistry: defaultVueInspectorRuntimeConfig.appRegistry,
       mountedAppDiscovery: {
@@ -91,8 +91,8 @@ describe('resolveVueInspectorRuntimeConfig', () => {
       adapter: 'auto',
       capabilities: {
         tree: true,
-        props: false,
-        highlight: false,
+        props: true,
+        highlight: true,
       },
       appRegistry: defaultVueInspectorRuntimeConfig.appRegistry,
       mountedAppDiscovery: {

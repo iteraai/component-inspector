@@ -7,10 +7,12 @@ import {
   buildNodePropsRequestMessage,
   buildTreeRequestMessage,
   defaultEmbeddedUrl,
+  defaultReactEmbeddedUrl,
+  defaultVueEmbeddedUrl,
   isExampleIterationRuntimeMessage,
   isPreviewPathUpdatedMessage,
   prettyJson,
-  publishButtonNodeId,
+  publishButtonDisplayName,
 } from './hostHarnessMessages';
 
 type LogEntry = {
@@ -28,6 +30,30 @@ const resolveOrigin = (value: string) => {
   }
 };
 
+const resolveFixtureNodeId = (payload: unknown, displayName: string) => {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('nodes' in payload) ||
+    !Array.isArray(payload.nodes)
+  ) {
+    return null;
+  }
+
+  const matchingNode = payload.nodes.find((node) => {
+    return (
+      typeof node === 'object' &&
+      node !== null &&
+      'displayName' in node &&
+      'id' in node &&
+      node.displayName === displayName &&
+      typeof node.id === 'string'
+    );
+  });
+
+  return matchingNode?.id ?? null;
+};
+
 export const HostHarnessApp = () => {
   const params = new URLSearchParams(window.location.search);
   const initialEmbeddedUrl = params.get('embeddedUrl') ?? defaultEmbeddedUrl;
@@ -42,6 +68,9 @@ export const HostHarnessApp = () => {
   const [treePayload, setTreePayload] = useState<string>('No tree received yet.');
   const [nodePropsPayload, setNodePropsPayload] = useState<string>(
     'No node props requested yet.',
+  );
+  const [publishButtonNodeId, setPublishButtonNodeId] = useState<string | null>(
+    null,
   );
   const [selectionSummary, setSelectionSummary] = useState<string>(
     'No selection message received yet.',
@@ -98,6 +127,14 @@ export const HostHarnessApp = () => {
   };
 
   const requestPublishButtonProps = () => {
+    if (publishButtonNodeId === null) {
+      setNodePropsPayload(
+        'PublishButton node id is unknown for the current fixture. Request the tree first.',
+      );
+      requestTree();
+      return;
+    }
+
     postToEmbedded(
       buildNodePropsRequestMessage(publishButtonNodeId, nextRequestId()),
       'REQUEST_NODE_PROPS',
@@ -117,6 +154,7 @@ export const HostHarnessApp = () => {
     setPreviewPath('waiting for READY');
     setTreePayload('No tree received yet.');
     setNodePropsPayload('No node props requested yet.');
+    setPublishButtonNodeId(null);
     setSelectionSummary('No selection message received yet.');
   }, [embeddedUrl]);
 
@@ -147,7 +185,10 @@ export const HostHarnessApp = () => {
       if (isExampleIterationRuntimeMessage(event.data)) {
         appendLog('inbound', event.data.kind, event.data);
 
-        if (event.data.kind === 'element_selected') {
+        if (
+          event.data.kind === 'element_selected' &&
+          event.data.selection?.displayText !== undefined
+        ) {
           setSelectionSummary(event.data.selection.displayText);
         }
 
@@ -166,11 +207,31 @@ export const HostHarnessApp = () => {
         case 'READY': {
           setConnectionState('connected');
           requestTree();
-          requestPublishButtonProps();
           return;
         }
         case 'TREE_SNAPSHOT': {
+          const nextPublishButtonNodeId = resolveFixtureNodeId(
+            parsedMessage.message.payload,
+            publishButtonDisplayName,
+          );
+
+          setPublishButtonNodeId(nextPublishButtonNodeId);
           setTreePayload(prettyJson(parsedMessage.message.payload));
+
+          if (nextPublishButtonNodeId === null) {
+            setNodePropsPayload(
+              `${publishButtonDisplayName} was not found in the current tree snapshot.`,
+            );
+            return;
+          }
+
+          postToEmbedded(
+            buildNodePropsRequestMessage(
+              nextPublishButtonNodeId,
+              nextRequestId(),
+            ),
+            'REQUEST_NODE_PROPS',
+          );
           return;
         }
         case 'NODE_PROPS': {
@@ -227,6 +288,26 @@ export const HostHarnessApp = () => {
           </label>
 
           <div className='example-button-row'>
+            <button
+              type='button'
+              className='example-button'
+              onClick={() => {
+                setDraftEmbeddedUrl(defaultReactEmbeddedUrl);
+                setEmbeddedUrl(defaultReactEmbeddedUrl);
+              }}
+            >
+              Use React fixture
+            </button>
+            <button
+              type='button'
+              className='example-button'
+              onClick={() => {
+                setDraftEmbeddedUrl(defaultVueEmbeddedUrl);
+                setEmbeddedUrl(defaultVueEmbeddedUrl);
+              }}
+            >
+              Use Vue fixture
+            </button>
             <button
               type='button'
               className='example-button'

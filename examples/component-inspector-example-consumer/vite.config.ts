@@ -10,6 +10,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         embedded: path.resolve(__dirname, 'embedded.html'),
+        embeddedVue: path.resolve(__dirname, 'embedded-vue.html'),
         host: path.resolve(__dirname, 'host.html'),
       },
     },

@@ -1,5 +1,5 @@
 import type { InspectorTreeSnapshot, VueMountedAppRecord } from '../base/types';
-import { resolveVueHighlightTarget } from './highlightTarget';
+import { resolveVueComponentRootElements } from './highlightTarget';
 import type { VueTraversalRecord, VueTraversalResult } from './traversal';
 
 export type VueNodeLookupPayload = Readonly<{
@@ -267,11 +267,9 @@ export const createVueNodeLookup = (): VueNodeLookup => {
           nextNodeIdByInstanceRef.set(instance, nodeId);
         }
 
-        const rootElement = resolveVueHighlightTarget(payload);
-
-        if (rootElement !== null) {
+        resolveVueComponentRootElements(payload).forEach((rootElement) => {
           nextNodeIdByRootElementRef.set(rootElement, nodeId);
-        }
+        });
       });
 
       payloadByNodeId = nextPayloadByNodeId;

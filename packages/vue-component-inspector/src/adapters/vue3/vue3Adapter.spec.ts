@@ -239,6 +239,40 @@ describe('vue3Adapter', () => {
     app.unmount();
   });
 
+  test('resolves fragment component paths from any root element when Vue DOM markers are absent', () => {
+    const FragmentToolbar = defineComponent({
+      name: 'FragmentToolbar',
+      setup: () =>
+        () => [
+          h('button', { id: 'fragment-action-primary' }, 'save'),
+          h('button', { id: 'fragment-action-secondary' }, 'cancel'),
+        ],
+    });
+    const TreeRoot = defineComponent({
+      name: 'FragmentSelectionRoot',
+      setup: () => () => h('main', [h(FragmentToolbar)]),
+    });
+    const { app, adapter } = createMountedAdapter(TreeRoot);
+    const mountedRoot = document.querySelector('main') as HTMLElement;
+    const secondaryAction = document.getElementById(
+      'fragment-action-secondary',
+    ) as HTMLElement;
+
+    expect(adapter.getComponentPathForElement?.(secondaryAction)).toEqual([
+      'FragmentSelectionRoot',
+      'FragmentToolbar',
+    ]);
+
+    stripVueDomMarkers(mountedRoot.parentElement as ParentNode);
+
+    expect(adapter.getComponentPathForElement?.(secondaryAction)).toEqual([
+      'FragmentSelectionRoot',
+      'FragmentToolbar',
+    ]);
+
+    app.unmount();
+  });
+
   test('walks KeepAlive caches so inactive component instances remain in the snapshot', async () => {
     const activeView = ref<'one' | 'two'>('one');
     const OneView = defineComponent({

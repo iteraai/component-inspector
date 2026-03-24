@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"],
+      "@iteraai/vue-component-inspector": ["./src/index.ts"],
+      "@iteraai/vue-component-inspector/embeddedBootstrap": [
+        "./src/embeddedBootstrap.ts"
+      ]
+    },
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src"]
+}

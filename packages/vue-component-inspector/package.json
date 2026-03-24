@@ -1,0 +1,67 @@
+{
+  "name": "@iteraai/vue-component-inspector",
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "Vue runtime foundation for the Itera component inspector SDK.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./embeddedBootstrap": {
+      "types": "./dist/embeddedBootstrap.d.ts",
+      "import": "./dist/embeddedBootstrap.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iteraai/component-inspector.git",
+    "directory": "packages/vue-component-inspector"
+  },
+  "bugs": {
+    "url": "https://github.com/iteraai/component-inspector/issues"
+  },
+  "homepage": "https://github.com/iteraai/component-inspector/tree/main/packages/vue-component-inspector#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vite build",
+    "prepack": "npm run build",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "lint": "eslint . --fix",
+    "lint:ci": "eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@iteraai/inspector-protocol": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "@stylistic/eslint-plugin-ts": "^4.2.0",
+    "@types/node": "^22.13.1",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-unicorn": "^58.0.0",
+    "globals": "^15.14.0",
+    "jsdom": "^26.0.0",
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.23.0",
+    "vite": "^6.0.5",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.0.8",
+    "vue": "^3.5.0"
+  }
+}

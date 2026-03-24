@@ -3,6 +3,7 @@ import { given } from '#test/givenWhenThen';
 import {
   MAX_TREE_SNAPSHOT_NODE_COUNT,
   capTreeSnapshot,
+  createBaseInspectorAdapter,
   createBaseReactInspectorAdapter,
   type CappedReactTreeSnapshot,
   type ReactTreeSnapshot,
@@ -13,8 +14,11 @@ type BaseAdapterContext = {
   cappedSnapshot?: CappedReactTreeSnapshot;
   nodeProps?: unknown;
   domElement?: Element | null;
+  componentPath?: ReadonlyArray<string>;
+  legacyComponentPath?: ReadonlyArray<string>;
   resolveNodeProps: ReturnType<typeof vi.fn>;
   resolveDomElement: ReturnType<typeof vi.fn>;
+  resolveComponentPath: ReturnType<typeof vi.fn>;
 };
 
 const contextCreated = (): BaseAdapterContext => {
@@ -35,6 +39,7 @@ const contextCreated = (): BaseAdapterContext => {
       displayName: node.displayName,
     })),
     resolveDomElement: vi.fn(() => document.createElement('div')),
+    resolveComponentPath: vi.fn(() => ['AppShell', 'ToolbarButton']),
   };
 };
 
@@ -159,6 +164,26 @@ const nodePropsAndDomRequestedForUnknownNode = (
   return context;
 };
 
+const componentPathResolvedThroughNeutralAndReactAdapters = (
+  context: BaseAdapterContext,
+): BaseAdapterContext => {
+  const element = document.createElement('button');
+  const inspectorAdapter = createBaseInspectorAdapter({
+    getTreeSnapshot: () => context.snapshot,
+    getComponentPathForElement: context.resolveComponentPath,
+  });
+  const reactAdapter = createBaseReactInspectorAdapter({
+    getTreeSnapshot: () => context.snapshot,
+    getReactComponentPathForElement: context.resolveComponentPath,
+  });
+
+  context.componentPath = inspectorAdapter.getComponentPathForElement?.(element);
+  context.legacyComponentPath =
+    reactAdapter.getReactComponentPathForElement?.(element);
+
+  return context;
+};
+
 const expectSnapshotReturnedWithoutTruncation = (
   context: BaseAdapterContext,
 ) => {
@@ -224,6 +249,14 @@ const expectNodeLookupResolversSkippedForUnknownNode = (
   expect(context.resolveDomElement).not.toHaveBeenCalled();
 };
 
+const expectComponentPathCompatibilityAcrossAdapterWrappers = (
+  context: BaseAdapterContext,
+) => {
+  expect(context.componentPath).toEqual(['AppShell', 'ToolbarButton']);
+  expect(context.legacyComponentPath).toEqual(['AppShell', 'ToolbarButton']);
+  expect(context.resolveComponentPath).toHaveBeenCalledTimes(2);
+};
+
 describe('baseAdapter', () => {
   test('should keep tree snapshot unchanged when node count is under cap', () => {
     return given(contextCreated)
@@ -261,5 +294,11 @@ describe('baseAdapter', () => {
     return given(contextCreated)
       .when(nodePropsAndDomRequestedForUnknownNode)
       .then(expectNodeLookupResolversSkippedForUnknownNode);
+  });
+
+  test('should keep component path lookup compatible across neutral and react wrappers', () => {
+    return given(contextCreated)
+      .when(componentPathResolvedThroughNeutralAndReactAdapters)
+      .then(expectComponentPathCompatibilityAcrossAdapterWrappers);
   });
 });

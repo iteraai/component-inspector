@@ -13,7 +13,12 @@ import {
 import { createReactInspectorAdapter } from './adapters/base/createReactInspectorAdapter';
 import type { ReactInspectorRuntimeConfig } from './adapters/base/types';
 import { createInspectorHighlighter } from './highlighter';
-import { capTreeSnapshot, type ReactTreeAdapter } from './reactTreeAdapter';
+import {
+  capTreeSnapshot,
+  toInspectorTreeAdapter,
+  type InspectorTreeAdapter,
+} from './inspectorTreeAdapter';
+import type { ReactTreeAdapter } from './reactTreeAdapter';
 import {
   emitEmbeddedBridgeLifecycleMetric,
   emitEmbeddedBridgeRejectionMetric,
@@ -63,15 +68,18 @@ type ResolvedInitInspectorBridgeOptions = Omit<
   InitInspectorBridgeOptions,
   'treeAdapter'
 > & {
-  treeAdapter?: ReactTreeAdapter;
+  treeAdapter?: InspectorTreeAdapter;
 };
 
 type InspectorBridge = {
   destroy: () => void;
 };
 
-type EmbeddedReactInspectorSelectionApi = {
-  getReactComponentPathForElement: (
+type EmbeddedInspectorSelectionApi = {
+  getComponentPathForElement?: (
+    element: Element,
+  ) => ReadonlyArray<string> | undefined;
+  getReactComponentPathForElement?: (
     element: Element,
   ) => ReadonlyArray<string> | undefined;
 };
@@ -83,7 +91,7 @@ type MessageTarget = {
 declare global {
   interface Window {
     __ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__?:
-      | EmbeddedReactInspectorSelectionApi
+      | EmbeddedInspectorSelectionApi
       | undefined;
   }
 }
@@ -489,22 +497,26 @@ const emitRejectionLifecycleTelemetry = (
 
 const resolveTreeAdapter = (
   options: InitInspectorBridgeOptions,
-): ReactTreeAdapter | undefined => {
+): InspectorTreeAdapter | undefined => {
   if (options.treeAdapter !== undefined) {
-    return options.treeAdapter;
+    return toInspectorTreeAdapter(options.treeAdapter);
   }
 
   if (options.adapterFactory !== undefined) {
-    return options.adapterFactory(options.runtimeConfig);
+    const adapter = options.adapterFactory(options.runtimeConfig);
+
+    return adapter === undefined ? undefined : toInspectorTreeAdapter(adapter);
   }
 
   if (options.runtimeConfig === undefined) {
     return undefined;
   }
 
-  return createReactInspectorAdapter(options.runtimeConfig, {
-    telemetry: options.telemetry,
-  });
+  return toInspectorTreeAdapter(
+    createReactInspectorAdapter(options.runtimeConfig, {
+      telemetry: options.telemetry,
+    }),
+  );
 };
 
 const resolveInitOptions = (
@@ -904,11 +916,14 @@ export const initInspectorBridge = (
 
   const resolvedOptions = resolveInitOptions(options);
   const highlighter = createInspectorHighlighter();
-  const selectionApi: EmbeddedReactInspectorSelectionApi = {
+
+  const resolveComponentPathForElement = (element: Element) => {
+    return resolvedOptions.treeAdapter?.getComponentPathForElement?.(element);
+  };
+  const selectionApi: EmbeddedInspectorSelectionApi = {
+    getComponentPathForElement: resolveComponentPathForElement,
     getReactComponentPathForElement: (element: Element) => {
-      return resolvedOptions.treeAdapter?.getReactComponentPathForElement?.(
-        element,
-      );
+      return resolveComponentPathForElement(element);
     },
   };
   let hostReadyConnection: HostReadyConnection | undefined = undefined;

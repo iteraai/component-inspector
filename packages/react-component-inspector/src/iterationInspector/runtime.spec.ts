@@ -1455,7 +1455,47 @@ describe('iterationInspector runtime', () => {
     });
   });
 
-  test('attaches React component ancestry when the embedded inspector bridge can resolve it', () => {
+  test('attaches React component ancestry when the embedded inspector bridge exposes the neutral selection API', () => {
+    document.body.innerHTML = `
+      <main>
+        <button id="save-button">Save</button>
+      </main>
+    `;
+    const button = document.getElementById('save-button');
+
+    expect(button).not.toBeNull();
+    assert(button instanceof HTMLButtonElement);
+
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+      top: 24,
+      left: 48,
+      width: 120,
+      height: 40,
+      right: 168,
+      bottom: 64,
+      x: 48,
+      y: 24,
+      toJSON: () => ({}),
+    });
+
+    const getComponentPathForElement = vi.fn(() => [
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
+    window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__ = {
+      getComponentPathForElement,
+    };
+
+    const selection = buildIterationElementSelection(button, window, document);
+
+    expect(getComponentPathForElement).toHaveBeenCalledWith(button);
+    expect(selection.element.reactComponentPath).toEqual([
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
+  });
+
+  test('attaches React component ancestry when the embedded inspector bridge only exposes the legacy selection API', () => {
     document.body.innerHTML = `
       <main>
         <button id="save-button">Save</button>

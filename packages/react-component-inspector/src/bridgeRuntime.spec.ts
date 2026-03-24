@@ -61,6 +61,7 @@ type BridgeContext = {
   resolvedFailingFiberNodeId?: string;
   resolvedFallbackNodeId?: string;
   resolvedSelectionPath?: ReadonlyArray<string>;
+  resolvedLegacySelectionPath?: ReadonlyArray<string>;
 };
 
 const windowRefWithDevtoolsHook = window as Window & {
@@ -1604,11 +1605,12 @@ const embeddedSelectionApiResolved = (
   context: BridgeContext,
 ): BridgeContext => {
   const buttonElement = document.createElement('button');
+  const selectionApi = window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
 
   context.resolvedSelectionPath =
-    window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__?.getReactComponentPathForElement(
-      buttonElement,
-    );
+    selectionApi?.getComponentPathForElement?.(buttonElement);
+  context.resolvedLegacySelectionPath =
+    selectionApi?.getReactComponentPathForElement?.(buttonElement);
 
   return context;
 };
@@ -1620,9 +1622,14 @@ const expectEmbeddedSelectionApiToDelegateToTreeAdapter = (
     'AppShell',
     'ForwardRef(ToolbarButton)',
   ]);
+  expect(context.resolvedLegacySelectionPath).toEqual([
+    'AppShell',
+    'ForwardRef(ToolbarButton)',
+  ]);
   expect(context.getReactComponentPathForElement).toHaveBeenCalledWith(
     expect.any(HTMLButtonElement),
   );
+  expect(context.getReactComponentPathForElement).toHaveBeenCalledTimes(2);
 
   return context;
 };

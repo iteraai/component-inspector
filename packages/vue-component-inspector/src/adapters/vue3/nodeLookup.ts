@@ -1,4 +1,5 @@
 import type { InspectorTreeSnapshot, VueMountedAppRecord } from '../base/types';
+import { resolveVueHighlightTarget } from './highlightTarget';
 import type { VueTraversalRecord, VueTraversalResult } from './traversal';
 
 export type VueNodeLookupPayload = Readonly<{
@@ -19,7 +20,17 @@ export type VueNodeLookup = Readonly<{
     snapshot: InspectorTreeSnapshot;
   }) => void;
   resolveByNodeId: (nodeId: string) => VueNodeLookupPayload | undefined;
+  resolveClosestComponentPathForElement: (
+    element: Element,
+  ) => ReadonlyArray<string> | undefined;
 }>;
+
+type VueComponentInstanceLike = Record<string, unknown>;
+type VueVNodeLike = Record<string, unknown>;
+type VueManagedElement = Element & Record<string, unknown>;
+
+const VUE_PARENT_COMPONENT_DOM_MARKER = '__vueParentComponent';
+const VUE_VNODE_DOM_MARKER = '__vnode';
 
 const toChildNodeIds = (
   childKeys: string[],
@@ -65,12 +76,155 @@ const toParentNodeId = (
   return parentNodeId;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const readRecordValue = (record: Record<string, unknown>, key: string) => {
+  try {
+    return record[key];
+  } catch {
+    return undefined;
+  }
+};
+
+const toComponentInstance = (
+  value: unknown,
+): VueComponentInstanceLike | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return value;
+};
+
+const toVNode = (value: unknown): VueVNodeLike | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return value;
+};
+
+const readParentInstance = (instance: VueComponentInstanceLike) => {
+  return toComponentInstance(readRecordValue(instance, 'parent'));
+};
+
+const readElementParentComponentMarker = (element: Element) => {
+  return toComponentInstance(
+    (element as VueManagedElement)[VUE_PARENT_COMPONENT_DOM_MARKER],
+  );
+};
+
+const readElementVNodeMarker = (element: Element) => {
+  return toVNode((element as VueManagedElement)[VUE_VNODE_DOM_MARKER]);
+};
+
+const readVNodeComponent = (vnode: VueVNodeLike) => {
+  return toComponentInstance(readRecordValue(vnode, 'component'));
+};
+
+const toMarkerInstances = (element: Element) => {
+  const instances: VueComponentInstanceLike[] = [];
+  const seenInstanceRefs = new Set<unknown>();
+
+  const appendInstance = (instance: VueComponentInstanceLike | undefined) => {
+    if (instance === undefined || seenInstanceRefs.has(instance)) {
+      return;
+    }
+
+    seenInstanceRefs.add(instance);
+    instances.push(instance);
+  };
+
+  appendInstance(readElementParentComponentMarker(element));
+
+  const elementVNode = readElementVNodeMarker(element);
+
+  if (elementVNode !== undefined) {
+    appendInstance(readVNodeComponent(elementVNode));
+  }
+
+  return instances;
+};
+
+const getParentElement = (element: Element): Element | null => {
+  if (element.parentElement !== null) {
+    return element.parentElement;
+  }
+
+  const parentNode = element.parentNode;
+
+  if (typeof ShadowRoot !== 'undefined' && parentNode instanceof ShadowRoot) {
+    return parentNode.host instanceof Element ? parentNode.host : null;
+  }
+
+  return parentNode instanceof Element ? parentNode : null;
+};
+
+const buildComponentPath = (
+  nodeId: string,
+  nodeById: ReadonlyMap<string, InspectorTreeSnapshot['nodes'][number]>,
+) => {
+  const componentPath: string[] = [];
+  const visitedNodeIds = new Set<string>();
+  let currentNodeId: string | null = nodeId;
+
+  while (currentNodeId !== null && !visitedNodeIds.has(currentNodeId)) {
+    visitedNodeIds.add(currentNodeId);
+
+    const currentNode = nodeById.get(currentNodeId);
+
+    if (currentNode === undefined) {
+      break;
+    }
+
+    componentPath.unshift(currentNode.displayName);
+    currentNodeId = currentNode.parentId;
+  }
+
+  return componentPath.length > 0 ? componentPath : undefined;
+};
+
+const resolveClosestNodeIdForInstance = (
+  instance: VueComponentInstanceLike,
+  nodeIdByInstanceRef: WeakMap<object, string>,
+) => {
+  const visitedInstances = new Set<unknown>();
+  let currentInstance: VueComponentInstanceLike | undefined = instance;
+
+  while (
+    currentInstance !== undefined &&
+    !visitedInstances.has(currentInstance)
+  ) {
+    visitedInstances.add(currentInstance);
+
+    const nodeId = nodeIdByInstanceRef.get(currentInstance);
+
+    if (nodeId !== undefined) {
+      return nodeId;
+    }
+
+    currentInstance = readParentInstance(currentInstance);
+  }
+
+  return undefined;
+};
+
 export const createVueNodeLookup = (): VueNodeLookup => {
   let payloadByNodeId = new Map<string, VueNodeLookupPayload>();
+  let nodeIdByInstanceRef = new WeakMap<object, string>();
+  let nodeIdByRootElementRef = new WeakMap<object, string>();
+  let nodeById = new Map<string, InspectorTreeSnapshot['nodes'][number]>();
 
   return {
     refreshFromSnapshot: (options) => {
       const nextPayloadByNodeId = new Map<string, VueNodeLookupPayload>();
+      const nextNodeIdByInstanceRef = new WeakMap<object, string>();
+      const nextNodeIdByRootElementRef = new WeakMap<object, string>();
+      const nextNodeById = new Map(
+        options.snapshot.nodes.map((node) => [node.id, node]),
+      );
       const includedNodeIdSet = new Set(
         options.snapshot.nodes.map((node) => node.id),
       );
@@ -86,7 +240,7 @@ export const createVueNodeLookup = (): VueNodeLookup => {
           return;
         }
 
-        nextPayloadByNodeId.set(nodeId, {
+        const payload = {
           nodeId,
           recordKey: record.key,
           appRecord: record.appRecord,
@@ -103,13 +257,64 @@ export const createVueNodeLookup = (): VueNodeLookup => {
             options.nodeIdByRecordKey,
             includedNodeIdSet,
           ),
-        });
+        } satisfies VueNodeLookupPayload;
+
+        nextPayloadByNodeId.set(nodeId, payload);
+
+        const instance = toComponentInstance(record.instance);
+
+        if (instance !== undefined) {
+          nextNodeIdByInstanceRef.set(instance, nodeId);
+        }
+
+        const rootElement = resolveVueHighlightTarget(payload);
+
+        if (rootElement !== null) {
+          nextNodeIdByRootElementRef.set(rootElement, nodeId);
+        }
       });
 
       payloadByNodeId = nextPayloadByNodeId;
+      nodeIdByInstanceRef = nextNodeIdByInstanceRef;
+      nodeIdByRootElementRef = nextNodeIdByRootElementRef;
+      nodeById = nextNodeById;
     },
     resolveByNodeId: (nodeId: string) => {
       return payloadByNodeId.get(nodeId);
+    },
+    resolveClosestComponentPathForElement: (element: Element) => {
+      let currentElement: Element | null = element;
+
+      while (currentElement !== null) {
+        const markerInstances = toMarkerInstances(currentElement);
+
+        for (const markerInstance of markerInstances) {
+          const nodeId = resolveClosestNodeIdForInstance(
+            markerInstance,
+            nodeIdByInstanceRef,
+          );
+
+          if (nodeId !== undefined) {
+            return buildComponentPath(nodeId, nodeById);
+          }
+        }
+
+        currentElement = getParentElement(currentElement);
+      }
+
+      currentElement = element;
+
+      while (currentElement !== null) {
+        const nodeId = nodeIdByRootElementRef.get(currentElement);
+
+        if (nodeId !== undefined) {
+          return buildComponentPath(nodeId, nodeById);
+        }
+
+        currentElement = getParentElement(currentElement);
+      }
+
+      return undefined;
     },
   };
 };

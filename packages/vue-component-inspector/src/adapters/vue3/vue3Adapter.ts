@@ -17,7 +17,7 @@ export const createVue3InspectorAdapter = (
   const nodeIdentityAllocator = createVueNodeIdentityAllocator();
   const nodeLookup = createVueNodeLookup();
 
-  const captureSnapshot = () => {
+  const refreshSnapshotState = () => {
     const traversalResult = traverseVueMountedApps(options.getMountedApps());
     const nodeIdentityResult = nodeIdentityAllocator.allocateNodeIds(
       traversalResult.records,
@@ -45,7 +45,7 @@ export const createVue3InspectorAdapter = (
   };
 
   return createBaseInspectorAdapter({
-    getTreeSnapshot: () => captureSnapshot(),
+    getTreeSnapshot: () => refreshSnapshotState(),
     getNodeProps: ({ node }) => {
       const lookupPayload = resolveLookupPayload(node.id);
 
@@ -70,6 +70,14 @@ export const createVue3InspectorAdapter = (
         return resolveVueHighlightTarget(lookupPayload);
       } catch {
         return null;
+      }
+    },
+    getComponentPathForElement: (element) => {
+      try {
+        refreshSnapshotState();
+        return nodeLookup.resolveClosestComponentPathForElement(element);
+      } catch {
+        return undefined;
       }
     },
   });

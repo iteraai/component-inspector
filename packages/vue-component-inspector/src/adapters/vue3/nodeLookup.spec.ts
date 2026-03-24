@@ -141,4 +141,110 @@ describe('nodeLookup', () => {
       recordKey: 'root',
     });
   });
+
+  test('resolves the nearest component path from Vue DOM markers', () => {
+    const lookup = createVueNodeLookup();
+    const rootElement = document.createElement('section');
+    const leafElement = document.createElement('button');
+    const selectionElement = document.createElement('span');
+    const rootInstance = {
+      parent: null,
+      subTree: {
+        el: rootElement,
+      },
+    };
+    const leafInstance = {
+      parent: rootInstance,
+      subTree: {
+        el: leafElement,
+      },
+    };
+    const traversalResult: VueTraversalResult = {
+      records: [
+        createTraversalRecord('root', {
+          displayName: 'RootNode',
+          childKeys: ['leaf'],
+          instance: rootInstance,
+        }),
+        createTraversalRecord('leaf', {
+          displayName: 'LeafNode',
+          parentKey: 'root',
+          instance: leafInstance,
+        }),
+      ],
+      rootRecordKeys: ['root'],
+    };
+
+    leafElement.append(selectionElement);
+    rootElement.append(leafElement);
+    Object.defineProperty(selectionElement, '__vueParentComponent', {
+      configurable: true,
+      value: leafInstance,
+    });
+
+    lookup.refreshFromSnapshot({
+      traversalResult,
+      nodeIdByRecordKey: new Map([
+        ['root', 'node-root'],
+        ['leaf', 'node-leaf'],
+      ]),
+      snapshot: createSnapshot(['node-root', 'node-leaf']),
+    });
+
+    expect(lookup.resolveClosestComponentPathForElement(selectionElement)).toEqual(
+      ['RootNode', 'LeafNode'],
+    );
+  });
+
+  test('falls back to known component root elements when Vue DOM markers are absent', () => {
+    const lookup = createVueNodeLookup();
+    const rootElement = document.createElement('section');
+    const leafElement = document.createElement('button');
+    const selectionElement = document.createElement('span');
+    const unmatchedElement = document.createElement('div');
+    const rootInstance = {
+      parent: null,
+      subTree: {
+        el: rootElement,
+      },
+    };
+    const leafInstance = {
+      parent: rootInstance,
+      subTree: {
+        el: leafElement,
+      },
+    };
+    const traversalResult: VueTraversalResult = {
+      records: [
+        createTraversalRecord('root', {
+          displayName: 'RootNode',
+          childKeys: ['leaf'],
+          instance: rootInstance,
+        }),
+        createTraversalRecord('leaf', {
+          displayName: 'LeafNode',
+          parentKey: 'root',
+          instance: leafInstance,
+        }),
+      ],
+      rootRecordKeys: ['root'],
+    };
+
+    leafElement.append(selectionElement);
+    rootElement.append(leafElement);
+
+    lookup.refreshFromSnapshot({
+      traversalResult,
+      nodeIdByRecordKey: new Map([
+        ['root', 'node-root'],
+        ['leaf', 'node-leaf'],
+      ]),
+      snapshot: createSnapshot(['node-root', 'node-leaf']),
+    });
+
+    expect(lookup.resolveClosestComponentPathForElement(selectionElement)).toEqual(
+      ['RootNode', 'LeafNode'],
+    );
+    expect(lookup.resolveClosestComponentPathForElement(unmatchedElement)).toBeUndefined();
+  });
 });

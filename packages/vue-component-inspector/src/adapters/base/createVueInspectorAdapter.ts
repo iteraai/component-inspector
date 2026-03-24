@@ -26,5 +26,8 @@ export const createVueInspectorAdapter = (
     getTreeSnapshot: () => adapter.getTreeSnapshot(),
     getNodeProps: (nodeId: string) => adapter.getNodeProps(nodeId),
     getDomElement: (nodeId: string) => adapter.getDomElement(nodeId),
+    getComponentPathForElement: (element: Element) => {
+      return adapter.getComponentPathForElement?.(element);
+    },
   };
 };

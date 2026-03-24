@@ -2,6 +2,7 @@ import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
   IterationElementSelection,
+  type IterationElementLocator,
   type IterationInspectorDebugDetails,
   IterationInspectorInvalidationReason,
   type IterationInspectorSelectionMode,
@@ -55,6 +56,11 @@ type RuntimeLifecycleReason =
   | 'reload';
 
 type SelectionSource = 'click' | 'pointerup';
+
+type IterationElementComponentPathFields = Pick<
+  IterationElementLocator,
+  'componentPath' | 'reactComponentPath'
+>;
 
 export type IterationInspectorRuntime = {
   start: () => void;
@@ -738,31 +744,18 @@ const buildInspectableTargetSelection = (
   win: Window = window,
   doc: Document = document,
 ): IterationElementSelection => {
-  const tagName = target.element.tagName.toLowerCase();
-  const role = getInspectableTargetRole(target);
-  const accessibleName = getInspectableTargetAccessibleName(target, doc);
-  const textPreview = getInspectableTargetTextPreview(target);
+  const locator = buildIterationElementLocator(target.element, win, doc);
 
   return {
     displayText: getInspectableTargetDisplayText(target, doc, {
       includeTextFallback: true,
     }),
     element: {
-      urlPath: getUrlPath(win.location),
-      cssSelector: buildCssSelector(target.element),
-      domPath: buildDomPath(target.element),
-      tagName,
-      role,
-      accessibleName,
-      textPreview,
-      id: normalizeWhitespace(target.element.id),
-      dataTestId: getDataTestId(target.element),
+      ...locator,
+      role: getInspectableTargetRole(target),
+      accessibleName: getInspectableTargetAccessibleName(target, doc),
+      textPreview: getInspectableTargetTextPreview(target),
       bounds: getInspectableTargetBounds(target, doc),
-      scrollOffset: {
-        x: roundMeasurement(win.scrollX),
-        y: roundMeasurement(win.scrollY),
-      },
-      capturedAt: new Date().toISOString(),
     },
   };
 };
@@ -788,41 +781,57 @@ const resolveComponentPath = (element: Element, win: Window) => {
   }
 };
 
+const buildSelectionComponentPathFields = (
+  element: Element,
+  win: Window,
+): IterationElementComponentPathFields => {
+  const componentPath = resolveComponentPath(element, win);
+
+  if (componentPath === undefined) {
+    return {};
+  }
+
+  return {
+    componentPath,
+    reactComponentPath: componentPath,
+  };
+};
+
+const buildIterationElementLocator = (
+  element: Element,
+  win: Window = window,
+  doc: Document = document,
+): IterationElementLocator => ({
+  urlPath: getUrlPath(win.location),
+  cssSelector: buildCssSelector(element),
+  domPath: buildDomPath(element),
+  tagName: element.tagName.toLowerCase(),
+  role: inferRole(element),
+  accessibleName: getAccessibleName(element, doc),
+  textPreview: getNodeText(element),
+  id: normalizeWhitespace(element.id),
+  dataTestId: getDataTestId(element),
+  bounds: getBounds(element),
+  scrollOffset: {
+    x: roundMeasurement(win.scrollX),
+    y: roundMeasurement(win.scrollY),
+  },
+  capturedAt: new Date().toISOString(),
+  ...buildSelectionComponentPathFields(element, win),
+});
+
 export const buildIterationElementSelection = (
   element: Element,
   win: Window = window,
   doc: Document = document,
 ): IterationElementSelection => {
-  const tagName = element.tagName.toLowerCase();
-  const role = inferRole(element);
-  const accessibleName = getAccessibleName(element, doc);
-  const textPreview = getNodeText(element);
-  const reactComponentPath = resolveComponentPath(element, win);
+  const locator = buildIterationElementLocator(element, win, doc);
 
   return {
     displayText: buildIterationElementDisplayText(element, doc, {
       includeTextFallback: true,
     }),
-    element: {
-      urlPath: getUrlPath(win.location),
-      cssSelector: buildCssSelector(element),
-      domPath: buildDomPath(element),
-      tagName,
-      role,
-      accessibleName,
-      textPreview,
-      id: normalizeWhitespace(element.id),
-      dataTestId: getDataTestId(element),
-      bounds: getBounds(element),
-      scrollOffset: {
-        x: roundMeasurement(win.scrollX),
-        y: roundMeasurement(win.scrollY),
-      },
-      capturedAt: new Date().toISOString(),
-      ...(reactComponentPath !== undefined && {
-        reactComponentPath,
-      }),
-    },
+    element: locator,
   };
 };
 

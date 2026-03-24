@@ -29,6 +29,41 @@ type GuardMatrixContext = {
   results?: boolean[];
 };
 
+const buildRuntimeSelectionMessage = (
+  locatorOverrides: Record<string, unknown> = {},
+) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'element_selected',
+    selection: {
+      displayText: '@button "Save"',
+      element: {
+        urlPath: '/projects/1',
+        cssSelector: 'button#save-button',
+        domPath: '/html[1]/body[1]/main[1]/button[1]',
+        tagName: 'button',
+        role: 'button',
+        accessibleName: 'Save',
+        textPreview: 'Save',
+        id: 'save-button',
+        dataTestId: 'save',
+        bounds: {
+          top: 24,
+          left: 48,
+          width: 120,
+          height: 40,
+        },
+        scrollOffset: {
+          x: 0,
+          y: 0,
+        },
+        capturedAt: '2026-03-24T10:00:00.000Z',
+        ...locatorOverrides,
+      },
+    },
+  };
+};
+
 const require = createRequire(import.meta.url);
 
 const getRuntimeExportKeys = (module: object) => Object.keys(module).sort();
@@ -172,22 +207,26 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
+        urlPath: '/projects/1',
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'mode_changed',
+        active: true,
       },
-      {
-        channel: ITERATION_INSPECTOR_CHANNEL,
-        kind: 'element_selected',
-      },
+      buildRuntimeSelectionMessage({
+        componentPath: ['AppShell', 'ToolbarButton'],
+        reactComponentPath: ['AppShell', 'ToolbarButton'],
+      }),
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'selection_invalidated',
+        reason: 'route_change',
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'debug_log',
+        event: 'selection_emitted',
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -197,6 +236,29 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         channel: 'other-channel',
         kind: 'runtime_ready',
       },
+    ],
+  };
+};
+
+const runtimeSelectionContractMatrixCreated = (): GuardMatrixContext => {
+  return {
+    messages: [
+      buildRuntimeSelectionMessage({
+        componentPath: ['AppShell', 'ToolbarButton'],
+        reactComponentPath: ['AppShell', 'ToolbarButton'],
+      }),
+      buildRuntimeSelectionMessage({
+        reactComponentPath: ['AppShell', 'ToolbarButton'],
+      }),
+      buildRuntimeSelectionMessage({
+        componentPath: ['AppShell', 'ToolbarButton'],
+      }),
+      buildRuntimeSelectionMessage({
+        componentPath: ['AppShell', ''],
+      }),
+      buildRuntimeSelectionMessage({
+        reactComponentPath: [],
+      }),
     ],
   };
 };
@@ -239,6 +301,12 @@ const expectCurrentRuntimeGuardKinds = (context: GuardMatrixContext) => {
   ]);
 };
 
+const expectRuntimeSelectionContractCompatibility = (
+  context: GuardMatrixContext,
+) => {
+  expect(context.results).toStrictEqual([true, true, true, false, false]);
+};
+
 describe('publicContract', () => {
   test('should preserve the current bridge entrypoints', () => {
     return given(contextCreated)
@@ -256,5 +324,11 @@ describe('publicContract', () => {
     return given(runtimeGuardMatrixCreated)
       .when(runtimeMessageGuardEvaluated)
       .then(expectCurrentRuntimeGuardKinds);
+  });
+
+  test('should keep iteration selection runtime guards compatible with additive component path fields', () => {
+    return given(runtimeSelectionContractMatrixCreated)
+      .when(runtimeMessageGuardEvaluated)
+      .then(expectRuntimeSelectionContractCompatibility);
   });
 });

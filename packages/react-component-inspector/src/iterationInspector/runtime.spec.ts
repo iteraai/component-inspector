@@ -35,6 +35,18 @@ const getPostedDebugLogMessages = (spy: ReturnType<typeof vi.spyOn>) =>
     > => message.kind === 'debug_log',
   );
 
+const getPostedSelectionMessages = (spy: ReturnType<typeof vi.spyOn>) =>
+  getPostedMessages(spy).filter(
+    (
+      message,
+    ): message is Extract<
+      IterationInspectorRuntimeMessage,
+      {
+        kind: 'element_selected';
+      }
+    > => message.kind === 'element_selected',
+  );
+
 const dispatchPointerEvent = (
   target: EventTarget,
   type: string,
@@ -1168,6 +1180,19 @@ const givenDebugClickSelectionContext = (): DebugSelectionContext => ({
     .mockImplementation(() => undefined),
 });
 
+const whenNeutralSelectionApiIsConfigured = <T extends SelectionContext>(
+  context: T,
+): T => {
+  window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__ = {
+    getComponentPathForElement: vi.fn(() => [
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]),
+  };
+
+  return context;
+};
+
 const whenButtonIsSelectedViaClick = <T extends SelectionContext>(
   context: T,
 ): T & ClickSelectionContext => {
@@ -1212,6 +1237,27 @@ const thenLaterClicksAreNotSuppressed = <T extends ClickSelectionContext>(
 ): T => {
   expect(context.followUpClickResult).toBe(true);
   expect(context.followUpClickEvent?.defaultPrevented).toBe(false);
+
+  return context;
+};
+
+const thenSelectionMessageIncludesNeutralAndLegacyComponentPaths = <
+  T extends SelectionContext,
+>(
+  context: T,
+): T => {
+  expect(getPostedSelectionMessages(context.postMessageSpy)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        selection: expect.objectContaining({
+          element: expect.objectContaining({
+            componentPath: ['AppShell', 'ForwardRef(ToolbarButton)'],
+            reactComponentPath: ['AppShell', 'ForwardRef(ToolbarButton)'],
+          }),
+        }),
+      }),
+    ]),
+  );
 
   return context;
 };
@@ -1489,6 +1535,10 @@ describe('iterationInspector runtime', () => {
     const selection = buildIterationElementSelection(button, window, document);
 
     expect(getComponentPathForElement).toHaveBeenCalledWith(button);
+    expect(selection.element.componentPath).toEqual([
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
     expect(selection.element.reactComponentPath).toEqual([
       'AppShell',
       'ForwardRef(ToolbarButton)',
@@ -1529,6 +1579,10 @@ describe('iterationInspector runtime', () => {
     const selection = buildIterationElementSelection(button, window, document);
 
     expect(getReactComponentPathForElement).toHaveBeenCalledWith(button);
+    expect(selection.element.componentPath).toEqual([
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
     expect(selection.element.reactComponentPath).toEqual([
       'AppShell',
       'ForwardRef(ToolbarButton)',
@@ -2173,6 +2227,15 @@ describe('iterationInspector runtime', () => {
       .when(whenSameButtonIsClickedAgain)
       .then(thenLaterClicksAreNotSuppressed)
       .then(thenSelectionMessagesInclude('@div "Save"'))
+      .then(thenStopsRuntime);
+  });
+
+  test('emits neutral and legacy component ancestry fields in selection messages', async () => {
+    await given(givenClickSelectionContext)
+      .when(whenNeutralSelectionApiIsConfigured)
+      .when(whenSelectModeIsEntered)
+      .when(whenButtonIsSelectedViaClick)
+      .then(thenSelectionMessageIncludesNeutralAndLegacyComponentPaths)
       .then(thenStopsRuntime);
   });
 

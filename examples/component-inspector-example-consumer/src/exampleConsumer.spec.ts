@@ -1,66 +1,19 @@
-import { spawnSync } from 'node:child_process';
 import { buildMessage } from '@iteraai/inspector-protocol';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   isIterationInspectorRuntimeMessage,
 } from '@iteraai/react-component-inspector/iterationInspector';
 import { act } from 'react';
+import {
+  dispatchHostMessage,
+  getPostedProtocolMessage,
+  getPostedRuntimeMessages,
+  isPreviewPathUpdatedMessage,
+  resolveInspectorImportPath,
+  trustedHostOrigin,
+  type MessageTargetDouble,
+} from './exampleConsumerTestUtils';
 import { renderEmbeddedHarnessApp } from './renderEmbeddedHarnessApp';
-
-const trustedHostOrigin = 'http://127.0.0.1:4173';
-
-type MessageTargetDouble = {
-  postMessage: ReturnType<typeof vi.fn>;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null;
-};
-
-const isPreviewPathUpdatedMessage = (
-  value: unknown,
-): value is {
-  channel: 'itera-preview-path';
-  type: 'PATH_UPDATED';
-  path: string;
-} => {
-  return (
-    isRecord(value) &&
-    value.channel === 'itera-preview-path' &&
-    value.type === 'PATH_UPDATED' &&
-    typeof value.path === 'string'
-  );
-};
-
-const getPostedProtocolMessage = (
-  spy: ReturnType<typeof vi.fn>,
-  type: string,
-) => {
-  const matchingCall = spy.mock.calls.find(([message]) => {
-    return isRecord(message) && message.type === type;
-  });
-
-  return matchingCall?.[0];
-};
-
-const getPostedRuntimeMessages = (spy: ReturnType<typeof vi.spyOn>) => {
-  return spy.mock.calls
-    .map(([message]) => message)
-    .filter(isIterationInspectorRuntimeMessage);
-};
-
-const dispatchHostMessage = (
-  message: unknown,
-  source: MessageEventSource | null,
-) => {
-  window.dispatchEvent(
-    new MessageEvent('message', {
-      data: message,
-      origin: trustedHostOrigin,
-      source,
-    }),
-  );
-};
 
 const mountHarness = async (
   props: Parameters<typeof renderEmbeddedHarnessApp>[1] = {},
@@ -105,36 +58,11 @@ afterEach(() => {
 });
 
 test('resolves public package imports to built dist entrypoints', () => {
-  const resolveImportPath = (specifier: string) => {
-    const resolution = spawnSync(
-      process.execPath,
-      [
-        '--input-type=module',
-        '-e',
-        `console.log(import.meta.resolve(${JSON.stringify(specifier)}))`,
-      ],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-      },
-    );
-
-    if (resolution.status !== 0) {
-      throw new Error(resolution.stderr || resolution.stdout);
-    }
-
-    const resolvedSpecifier = resolution.stdout.trim();
-
-    return resolvedSpecifier.startsWith('file://')
-      ? new URL(resolvedSpecifier).pathname
-      : resolvedSpecifier;
-  };
-
   const resolvedEntryPoints = [
-    resolveImportPath('@iteraai/inspector-protocol'),
-    resolveImportPath('@iteraai/inspector-protocol/errors'),
-    resolveImportPath('@iteraai/react-component-inspector'),
-    resolveImportPath('@iteraai/react-component-inspector/iterationInspector'),
+    resolveInspectorImportPath('@iteraai/inspector-protocol'),
+    resolveInspectorImportPath('@iteraai/inspector-protocol/errors'),
+    resolveInspectorImportPath('@iteraai/react-component-inspector'),
+    resolveInspectorImportPath('@iteraai/react-component-inspector/iterationInspector'),
   ];
 
   for (const resolvedEntryPoint of resolvedEntryPoints) {
@@ -250,7 +178,9 @@ test('emits iteration selection messages for the embedded fixture button', async
   });
 
   try {
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,
@@ -283,7 +213,9 @@ test('emits iteration selection messages for the embedded fixture button', async
 
     expect(selectionResult).toBe(false);
     expect(selectionClick.defaultPrevented).toBe(true);
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,

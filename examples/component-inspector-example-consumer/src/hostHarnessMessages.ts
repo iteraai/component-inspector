@@ -1,24 +1,31 @@
 import { buildMessage } from '@iteraai/inspector-protocol';
-import {
-  ITERATION_INSPECTOR_CHANNEL,
-  isIterationInspectorRuntimeMessage,
-} from '@iteraai/react-component-inspector/iterationInspector';
 
 export const exampleHostOrigin = 'http://127.0.0.1:4173';
 export const exampleEmbeddedOrigin = 'http://127.0.0.1:4174';
 export const exampleSessionId = 'component-inspector-example-session';
-export const publishButtonNodeId = 'publish-button';
+export const exampleIterationInspectorChannel = 'itera:iteration-inspector';
+export const publishButtonDisplayName = 'PublishButton';
 
 const defaultEmbeddedHostOrigins = encodeURIComponent(
   `${exampleHostOrigin},http://localhost:4173`,
 );
 
-export const defaultEmbeddedUrl = `${exampleEmbeddedOrigin}/embedded.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
+export const defaultReactEmbeddedUrl = `${exampleEmbeddedOrigin}/embedded.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
+export const defaultVueEmbeddedUrl = `${exampleEmbeddedOrigin}/embedded-vue.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
+export const defaultEmbeddedUrl = defaultReactEmbeddedUrl;
 
 type PreviewPathUpdatedMessage = {
   channel: 'itera-preview-path';
   type: 'PATH_UPDATED';
   path: string;
+};
+
+type ExampleIterationRuntimeMessage = {
+  channel: typeof exampleIterationInspectorChannel;
+  kind: string;
+  selection?: {
+    displayText?: string;
+  };
 };
 
 export const buildHelloMessage = (requestId: string) =>
@@ -62,14 +69,14 @@ export const buildNodePropsRequestMessage = (
 
 export const buildEnterSelectModeMessage = () => {
   return {
-    channel: ITERATION_INSPECTOR_CHANNEL,
+    channel: exampleIterationInspectorChannel,
     kind: 'enter_select_mode',
   } as const;
 };
 
 export const buildClearHoverMessage = () => {
   return {
-    channel: ITERATION_INSPECTOR_CHANNEL,
+    channel: exampleIterationInspectorChannel,
     kind: 'clear_hover',
   } as const;
 };
@@ -89,7 +96,18 @@ export const isPreviewPathUpdatedMessage = (
   );
 };
 
-export const isExampleIterationRuntimeMessage = isIterationInspectorRuntimeMessage;
+export const isExampleIterationRuntimeMessage = (
+  value: unknown,
+): value is ExampleIterationRuntimeMessage => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'channel' in value &&
+    'kind' in value &&
+    value.channel === exampleIterationInspectorChannel &&
+    typeof value.kind === 'string'
+  );
+};
 
 export const prettyJson = (value: unknown) => {
   return JSON.stringify(value, null, 2);

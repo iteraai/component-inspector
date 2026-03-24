@@ -1,6 +1,4 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { EmbeddedHarnessApp } from './embeddedHarnessApp';
+import { renderVueEmbeddedHarnessApp } from './renderVueEmbeddedHarnessApp';
 import './styles.css';
 
 const params = new URLSearchParams(window.location.search);
@@ -17,15 +15,11 @@ const allowSelfMessaging = params.get('allowSelfMessaging') === '1';
 const rootElement = document.getElementById('root');
 
 if (rootElement === null) {
-  throw new Error('Embedded example root element was not found.');
+  throw new Error('Embedded Vue example root element was not found.');
 }
 
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <EmbeddedHarnessApp
-      allowSelfMessaging={allowSelfMessaging}
-      enabled={enabled}
-      hostOrigins={hostOrigins}
-    />
-  </React.StrictMode>,
-);
+renderVueEmbeddedHarnessApp(rootElement, {
+  allowSelfMessaging,
+  enabled,
+  hostOrigins,
+});

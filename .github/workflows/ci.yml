@@ -53,6 +53,10 @@ jobs:
             command: npm run docs-drift:check
           - name: unit-test
             command: npm run test
+          - name: example-smoke-react
+            command: npm run test:examples:react
+          - name: example-smoke-vue
+            command: npm run test:examples:vue
           - name: build
             command: npm run build
           - name: pack-smoke

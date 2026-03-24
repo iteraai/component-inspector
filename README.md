@@ -61,9 +61,9 @@ The repo also carries a focused customer-style fixture workspace:
 
 | Workspace                              | Path                                                                                               | Role                                                                                                                      |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `component-inspector-example-consumer` | [`examples/component-inspector-example-consumer`](./examples/component-inspector-example-consumer) | Host/embed harness that imports the public package names and smoke-tests handshake, tree, props, and iteration selection. |
+| `component-inspector-example-consumer` | [`examples/component-inspector-example-consumer`](./examples/component-inspector-example-consumer) | Host/embed harness that imports the public package names and smoke-tests React and Vue handshake, tree, props, snapshot, highlight, and iteration selection flows. |
 
-This example workspace exists to prove customer-style consumption against the built package entrypoints. Its Vitest smoke coverage asserts that imports resolve to `dist/`, not `src/`.
+This example workspace exists to prove customer-style consumption against the built package entrypoints. Its Vitest smoke coverage asserts that React and Vue imports resolve to `dist/`, not `src/`.
 
 ## Hosted Editor Architecture
 
@@ -80,7 +80,7 @@ flowchart LR
 
 At a high level:
 
-- The embedded React app boots the inspector bridge and allowlists the hosted editor origins that may talk to it.
+- The embedded app boots the framework-specific inspector bridge and allowlists the hosted editor origins that may talk to it.
 - The host sends protocol messages on `itera-component-inspector`; the embedded bridge responds with `READY`, tree data, props, snapshots, highlights, and errors.
 - After the initial handshake, the embedded bridge also posts preview-path updates on `itera-preview-path` when the iframe navigates.
 - The optional `iterationInspector` runtime handles element-picking UX over the separate `itera:iteration-inspector` channel.
@@ -160,6 +160,8 @@ npm run test --workspace @iteraai/vue-component-inspector
 npm run lint:ci --workspace @iteraai/react-component-inspector
 npm run lint:ci --workspace @iteraai/vue-component-inspector
 npm run test:examples
+npm run test:examples:react
+npm run test:examples:vue
 ```
 
 `npm run test:pack` validates the built package shape in a clean smoke fixture so the documented import paths stay aligned with the tarballs customers will eventually install.
@@ -168,5 +170,6 @@ To inspect the example host/embed flow manually after building the SDK packages:
 
 ```bash
 npm run example:host
-npm run example:embedded
+npm run example:embedded:react
+npm run example:embedded:vue
 ```

@@ -3,12 +3,8 @@ import {
   bootstrapEmbeddedInspectorBridge,
 } from '@iteraai/react-component-inspector';
 import { useEffect } from 'react';
+import { resolveExampleHostOrigins } from './exampleEmbeddedRuntimeConfig';
 import { createExampleHarnessAdapter } from './embeddedHarnessData';
-
-export const defaultExampleHostOrigins = [
-  'http://127.0.0.1:4173',
-  'http://localhost:4173',
-] as const;
 
 export type EmbeddedHarnessAppProps = {
   enabled?: boolean;
@@ -16,26 +12,12 @@ export type EmbeddedHarnessAppProps = {
   allowSelfMessaging?: boolean;
 };
 
-const resolveHostOrigins = (hostOrigins?: readonly string[]) => {
-  if (hostOrigins === undefined) {
-    return [...defaultExampleHostOrigins];
-  }
-
-  const resolvedHostOrigins = hostOrigins
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-
-  return resolvedHostOrigins.length > 0
-    ? resolvedHostOrigins
-    : [...defaultExampleHostOrigins];
-};
-
 export const EmbeddedHarnessApp = ({
   enabled = true,
   hostOrigins,
   allowSelfMessaging = false,
 }: EmbeddedHarnessAppProps) => {
-  const resolvedHostOrigins = resolveHostOrigins(hostOrigins);
+  const resolvedHostOrigins = resolveExampleHostOrigins(hostOrigins);
 
   useEffect(() => {
     const bridge = bootstrapEmbeddedInspectorBridge({

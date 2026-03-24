@@ -1,15 +1,28 @@
 import { given } from '#test/givenWhenThen';
 import {
   ITERATION_INSPECTOR_CHANNEL,
+  type IterationElementLocator,
   type IterationInspectorRuntimeMessage,
 } from './types';
-import { createIterationInspectorRuntime } from './runtime';
+import {
+  buildIterationElementSelection,
+  createIterationInspectorRuntime,
+} from './runtime';
 
 type RuntimeEditModeContext = {
   firstTarget: HTMLDivElement;
   secondTarget: HTMLDivElement;
   postMessageSpy: ReturnType<typeof vi.spyOn>;
   runtime: ReturnType<typeof createIterationInspectorRuntime>;
+};
+
+type PreviewEditsContext = {
+  imageTarget: HTMLImageElement;
+  postMessageSpy: ReturnType<typeof vi.spyOn>;
+  runtime: ReturnType<typeof createIterationInspectorRuntime>;
+  target: HTMLDivElement;
+  targetLocator: IterationElementLocator;
+  imageLocator: IterationElementLocator;
 };
 
 const getPostedMessages = (
@@ -87,6 +100,265 @@ const givenPersistentRuntime = (): RuntimeEditModeContext => {
     postMessageSpy,
     runtime,
   };
+};
+
+const givenPreviewEditsRuntime = (): PreviewEditsContext => {
+  document.body.innerHTML = `
+    <main>
+      <div id="preview-target" data-testid="preview-card">Original copy</div>
+      <img id="preview-image" alt="Preview" src="/initial.png" />
+    </main>
+  `;
+
+  const target = document.getElementById('preview-target');
+  const imageTarget = document.getElementById('preview-image');
+
+  expect(target).not.toBeNull();
+  expect(imageTarget).not.toBeNull();
+  assert(target instanceof HTMLDivElement);
+  assert(imageTarget instanceof HTMLImageElement);
+
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+    top: 12,
+    left: 24,
+    width: 120,
+    height: 40,
+    right: 144,
+    bottom: 52,
+    x: 24,
+    y: 12,
+    toJSON: () => ({}),
+  });
+  vi.spyOn(imageTarget, 'getBoundingClientRect').mockReturnValue({
+    top: 72,
+    left: 24,
+    width: 96,
+    height: 96,
+    right: 120,
+    bottom: 168,
+    x: 24,
+    y: 72,
+    toJSON: () => ({}),
+  });
+
+  const postMessageSpy = vi
+    .spyOn(window, 'postMessage')
+    .mockImplementation(() => undefined);
+  const runtime = createIterationInspectorRuntime({
+    allowSelfMessaging: true,
+  });
+
+  runtime.start();
+
+  return {
+    imageLocator: buildIterationElementSelection(imageTarget).element,
+    imageTarget,
+    postMessageSpy,
+    runtime,
+    target,
+    targetLocator: buildIterationElementSelection(target).element,
+  };
+};
+
+const whenPreviewEditsAreSynced = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'sync_preview_edits',
+        revision: 1,
+        targets: [
+          {
+            locator: context.targetLocator,
+            operations: [
+              {
+                fieldId: 'textContent',
+                value: 'Updated copy',
+                valueType: 'string',
+              },
+              {
+                fieldId: 'backgroundColor',
+                value: '#ff0000',
+                valueType: 'string',
+              },
+              {
+                fieldId: 'width',
+                value: '240',
+                valueType: 'number',
+              },
+            ],
+          },
+          {
+            locator: context.imageLocator,
+            operations: [
+              {
+                fieldId: 'assetReference',
+                value: 'https://example.com/preview.png',
+                valueType: 'asset_reference',
+              },
+            ],
+          },
+        ],
+      },
+      origin: 'https://itera.example',
+      source: window,
+    }),
+  );
+
+  return context;
+};
+
+const thenPreviewEditsAreApplied = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  expect(context.target.textContent).toBe('Updated copy');
+  expect(context.target.style.width).toBe('240px');
+  expect(context.target.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  expect(context.imageTarget.getAttribute('src')).toBe(
+    'https://example.com/preview.png',
+  );
+  expect(getPostedMessages(context.postMessageSpy)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'preview_edits_status',
+        revision: 1,
+        appliedTargetCount: 2,
+      }),
+    ]),
+  );
+
+  return context;
+};
+
+const whenPreviewEditsAreCleared = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'clear_preview_edits',
+        revision: 2,
+      },
+      origin: 'https://itera.example',
+      source: window,
+    }),
+  );
+
+  return context;
+};
+
+const thenPreviewEditsAreRestored = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  expect(context.target.textContent).toBe('Original copy');
+  expect(context.target.style.width).toBe('');
+  expect(context.target.style.backgroundColor).toBe('');
+  expect(context.imageTarget.getAttribute('src')).toBe('/initial.png');
+  expect(getPostedMessages(context.postMessageSpy)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'preview_edits_status',
+        revision: 2,
+        appliedTargetCount: 0,
+      }),
+    ]),
+  );
+
+  return context;
+};
+
+const whenInvalidPreviewEditsAreSynced = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'sync_preview_edits',
+        revision: 3,
+        targets: [
+          {
+            locator: {
+              ...context.targetLocator,
+              urlPath: '/other-route',
+            },
+            operations: [
+              {
+                fieldId: 'textContent',
+                value: 'Ignored copy',
+                valueType: 'string',
+              },
+            ],
+          },
+          {
+            locator: context.targetLocator,
+            operations: [
+              {
+                fieldId: 'unsupportedField',
+                value: '123',
+                valueType: 'string',
+              },
+            ],
+          },
+        ],
+      },
+      origin: 'https://itera.example',
+      source: window,
+    }),
+  );
+
+  return context;
+};
+
+const thenPreviewEditFailuresAreReported = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  expect(context.target.textContent).toBe('Original copy');
+
+  expect(getPostedMessages(context.postMessageSpy)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'preview_edits_status',
+        revision: 3,
+        appliedTargetCount: 0,
+        errors: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'url_mismatch',
+            targetIndex: 0,
+          }),
+          expect.objectContaining({
+            code: 'unsupported_field',
+            fieldId: 'unsupportedField',
+            targetIndex: 1,
+          }),
+        ]),
+      }),
+    ]),
+  );
+
+  return context;
+};
+
+const thenRuntimeAdvertisesPreviewEditCapability = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  expect(getPostedMessages(context.postMessageSpy)).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    ]),
+  );
+
+  return context;
 };
 
 const whenFirstTargetIsSelected = (
@@ -182,6 +454,14 @@ const thenRuntimeIsStopped = (
   return context;
 };
 
+const thenPreviewRuntimeIsStopped = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  context.runtime.stop();
+  context.postMessageSpy.mockRestore();
+  return context;
+};
+
 describe('iteration inspector runtime edit mode', () => {
   test('should keep select mode active across repeated selections in persistent mode', async () => {
     return given(givenPersistentRuntime)
@@ -190,5 +470,27 @@ describe('iteration inspector runtime edit mode', () => {
       .when(whenSecondTargetIsSelected)
       .then(thenSecondSelectionIsAlsoEmitted)
       .then(thenRuntimeIsStopped);
+  });
+
+  test('should advertise preview patch capability when the runtime starts', async () => {
+    return given(givenPreviewEditsRuntime)
+      .then(thenRuntimeAdvertisesPreviewEditCapability)
+      .then(thenPreviewRuntimeIsStopped);
+  });
+
+  test('should apply preview edits and restore original DOM state when cleared', async () => {
+    return given(givenPreviewEditsRuntime)
+      .when(whenPreviewEditsAreSynced)
+      .then(thenPreviewEditsAreApplied)
+      .when(whenPreviewEditsAreCleared)
+      .then(thenPreviewEditsAreRestored)
+      .then(thenPreviewRuntimeIsStopped);
+  });
+
+  test('should fail soft when preview targets cannot be resolved or a field is unsupported', async () => {
+    return given(givenPreviewEditsRuntime)
+      .when(whenInvalidPreviewEditsAreSynced)
+      .then(thenPreviewEditFailuresAreReported)
+      .then(thenPreviewRuntimeIsStopped);
   });
 });

@@ -64,6 +64,26 @@ const buildRuntimeSelectionMessage = (
   };
 };
 
+const buildPreviewSyncMessage = () => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'sync_preview_edits',
+    revision: 1,
+    targets: [
+      {
+        locator: buildRuntimeSelectionMessage().selection.element,
+        operations: [
+          {
+            fieldId: 'textContent',
+            value: 'Updated',
+            valueType: 'string',
+          },
+        ],
+      },
+    ],
+  };
+};
+
 const require = createRequire(import.meta.url);
 
 const getRuntimeExportKeys = (module: object) => Object.keys(module).sort();
@@ -189,6 +209,12 @@ const parentGuardMatrixCreated = (): GuardMatrixContext => {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'clear_hover',
       },
+      buildPreviewSyncMessage(),
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'clear_preview_edits',
+        revision: 2,
+      },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'debug_log',
@@ -208,6 +234,7 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: '/projects/1',
+        capabilities: ['preview_edits_v1'],
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -222,6 +249,20 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'selection_invalidated',
         reason: 'route_change',
+      },
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'preview_edits_status',
+        revision: 2,
+        appliedTargetCount: 1,
+        errors: [
+          {
+            code: 'locator_not_found',
+            message: 'Preview target could not be resolved in the current DOM.',
+            targetIndex: 0,
+            fieldId: 'textContent',
+          },
+        ],
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -286,11 +327,12 @@ const runtimeMessageGuardEvaluated = (
 };
 
 const expectCurrentParentGuardKinds = (context: GuardMatrixContext) => {
-  expect(context.results).toStrictEqual([true, true, true, false, false]);
+  expect(context.results).toStrictEqual([true, true, true, true, true, false, false]);
 };
 
 const expectCurrentRuntimeGuardKinds = (context: GuardMatrixContext) => {
   expect(context.results).toStrictEqual([
+    true,
     true,
     true,
     true,

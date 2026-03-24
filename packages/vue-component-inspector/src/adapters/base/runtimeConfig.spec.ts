@@ -46,7 +46,7 @@ describe('resolveVueInspectorRuntimeConfig', () => {
     ).toEqual({
       adapter: 'auto',
       capabilities: {
-        tree: false,
+        tree: true,
         props: false,
         highlight: true,
       },
@@ -70,7 +70,7 @@ describe('resolveVueInspectorRuntimeConfig', () => {
     ).toEqual({
       adapter: 'vue3',
       capabilities: {
-        tree: false,
+        tree: true,
         props: false,
         highlight: false,
       },

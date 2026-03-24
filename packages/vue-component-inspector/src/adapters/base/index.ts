@@ -1,5 +1,13 @@
 export { createVueInspectorAdapter } from './createVueInspectorAdapter';
 export {
+  capTreeSnapshot,
+  createBaseInspectorAdapter,
+  MAX_TREE_SNAPSHOT_NODE_COUNT,
+  type CappedInspectorTreeSnapshot,
+  type CreateBaseInspectorAdapterOptions,
+  type InspectorAdapterNodeLookup,
+} from './baseAdapter';
+export {
   createVueMountedAppRegistry,
   defaultVueMountedAppRegistry,
   discoverMountedVueApps,
@@ -20,6 +28,7 @@ export {
   vueInspectorRuntimeAdapterTargets,
   type InspectorAdapterCapabilities,
   type InspectorAdapterContract,
+  type InspectorComponentPath,
   type InspectorTreeSnapshot,
   type RegisterMountedVueAppOptions,
   type ResolvedVueInspectorRuntimeConfig,

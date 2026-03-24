@@ -23,6 +23,8 @@ export type InspectorTreeSnapshot = {
   meta?: TreeSnapshotMeta;
 };
 
+export type InspectorComponentPath = ReadonlyArray<string>;
+
 export type InspectorAdapterCapabilities = Readonly<{
   tree: boolean;
   props: boolean;
@@ -78,7 +80,7 @@ export type InspectorAdapterContract = {
   getDomElement: (nodeId: string) => Element | null;
   getComponentPathForElement?: (
     element: Element,
-  ) => ReadonlyArray<string> | undefined;
+  ) => InspectorComponentPath | undefined;
 };
 
 export type VueInspectorAdapterContract = InspectorAdapterContract & {

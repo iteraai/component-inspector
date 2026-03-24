@@ -22,18 +22,24 @@ export const toInspectorTreeAdapter = (
     return adapter;
   }
 
-  const legacyComponentPathResolver =
-    'getReactComponentPathForElement' in adapter
-      ? adapter.getReactComponentPathForElement
-      : undefined;
+  if (
+    'getReactComponentPathForElement' in adapter &&
+    adapter.getReactComponentPathForElement !== undefined
+  ) {
+    return {
+      getTreeSnapshot: () => adapter.getTreeSnapshot(),
+      getNodeProps: (nodeId) => adapter.getNodeProps(nodeId),
+      getDomElement: (nodeId) => adapter.getDomElement(nodeId),
+      getComponentPathForElement: (element: Element) => {
+        return adapter.getReactComponentPathForElement?.(element);
+      },
+    };
+  }
 
   return {
-    getTreeSnapshot: adapter.getTreeSnapshot,
-    getNodeProps: adapter.getNodeProps,
-    getDomElement: adapter.getDomElement,
-    ...(legacyComponentPathResolver !== undefined && {
-      getComponentPathForElement: legacyComponentPathResolver,
-    }),
+    getTreeSnapshot: () => adapter.getTreeSnapshot(),
+    getNodeProps: (nodeId) => adapter.getNodeProps(nodeId),
+    getDomElement: (nodeId) => adapter.getDomElement(nodeId),
   };
 };
 
@@ -41,11 +47,12 @@ export const toReactTreeAdapter = (
   adapter: InspectorTreeAdapter,
 ): ReactInspectorAdapterContract => {
   return {
-    getTreeSnapshot: adapter.getTreeSnapshot,
-    getNodeProps: adapter.getNodeProps,
-    getDomElement: adapter.getDomElement,
+    getTreeSnapshot: () => adapter.getTreeSnapshot(),
+    getNodeProps: (nodeId) => adapter.getNodeProps(nodeId),
+    getDomElement: (nodeId) => adapter.getDomElement(nodeId),
     ...(adapter.getComponentPathForElement !== undefined && {
-      getReactComponentPathForElement: adapter.getComponentPathForElement,
+      getReactComponentPathForElement: (element: Element) =>
+        adapter.getComponentPathForElement?.(element),
     }),
   };
 };

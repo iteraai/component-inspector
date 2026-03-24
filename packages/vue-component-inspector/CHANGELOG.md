@@ -1,5 +1,13 @@
 # @iteraai/vue-component-inspector
 
+## 0.1.0
+
+### Minor Changes
+
+- 8c7c020: Add the Vue inspector foundation with runtime config defaults, mounted-app registration/discovery APIs, and embedded mount bootstrap registration support.
+- 128f1b1: Add Vue tree snapshot support, including shared tree adapter utilities, Vue 3 traversal through fragments, Suspense branches, and KeepAlive caches, stable node identity, and best-effort source metadata.
+- cd72ac6: Add Vue node props inspection and DOM highlight target resolution. The Vue inspector can now resolve stable node IDs back to mounted component instances, return serialized component props, and find highlightable DOM elements for DOM-rooted, fragment-backed, and nested component trees.
+
 ## 0.0.0
 
 ### Minor Changes

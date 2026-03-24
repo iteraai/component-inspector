@@ -19,6 +19,8 @@ type RuntimeEditModeContext = {
 type PreviewEditsContext = {
   imageTarget: HTMLImageElement;
   postMessageSpy: ReturnType<typeof vi.spyOn>;
+  richTarget: HTMLDivElement;
+  richTargetLocator: IterationElementLocator;
   runtime: ReturnType<typeof createIterationInspectorRuntime>;
   target: HTMLDivElement;
   targetLocator: IterationElementLocator;
@@ -106,16 +108,23 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
   document.body.innerHTML = `
     <main>
       <div id="preview-target" data-testid="preview-card">Original copy</div>
+      <div id="preview-rich-target" data-testid="preview-rich-card">
+        <strong id="preview-rich-strong">Original</strong>
+        <span> nested copy</span>
+      </div>
       <img id="preview-image" alt="Preview" src="/initial.png" />
     </main>
   `;
 
   const target = document.getElementById('preview-target');
+  const richTarget = document.getElementById('preview-rich-target');
   const imageTarget = document.getElementById('preview-image');
 
   expect(target).not.toBeNull();
+  expect(richTarget).not.toBeNull();
   expect(imageTarget).not.toBeNull();
   assert(target instanceof HTMLDivElement);
+  assert(richTarget instanceof HTMLDivElement);
   assert(imageTarget instanceof HTMLImageElement);
 
   vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
@@ -140,6 +149,17 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
     y: 72,
     toJSON: () => ({}),
   });
+  vi.spyOn(richTarget, 'getBoundingClientRect').mockReturnValue({
+    top: 132,
+    left: 24,
+    width: 180,
+    height: 44,
+    right: 204,
+    bottom: 176,
+    x: 24,
+    y: 132,
+    toJSON: () => ({}),
+  });
 
   const postMessageSpy = vi
     .spyOn(window, 'postMessage')
@@ -154,6 +174,8 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
     imageLocator: buildIterationElementSelection(imageTarget).element,
     imageTarget,
     postMessageSpy,
+    richTarget,
+    richTargetLocator: buildIterationElementSelection(richTarget).element,
     runtime,
     target,
     targetLocator: buildIterationElementSelection(target).element,
@@ -311,6 +333,64 @@ const whenInvalidPreviewEditsAreSynced = (
       source: window,
     }),
   );
+
+  return context;
+};
+
+const whenNestedTextPreviewEditIsSynced = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'sync_preview_edits',
+        revision: 4,
+        targets: [
+          {
+            locator: context.richTargetLocator,
+            operations: [
+              {
+                fieldId: 'textContent',
+                value: 'Flattened copy',
+                valueType: 'string',
+              },
+            ],
+          },
+        ],
+      },
+      origin: 'https://itera.example',
+      source: window,
+    }),
+  );
+
+  return context;
+};
+
+const thenNestedTextPreviewEditIsApplied = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  expect(context.richTarget.textContent).toBe('Flattened copy');
+  expect(context.richTarget.querySelector('#preview-rich-strong')).toBeNull();
+
+  return context;
+};
+
+const thenNestedTextPreviewEditsRestoreOriginalChildren = (
+  context: PreviewEditsContext,
+): PreviewEditsContext => {
+  const strong = context.richTarget.querySelector('#preview-rich-strong');
+  expect(strong).not.toBeNull();
+  expect(context.richTarget.innerHTML).toContain('<strong id="preview-rich-strong">Original</strong>');
+  expect(context.richTarget.textContent?.replaceAll(/\s+/g, ' ').trim()).toBe(
+    'Original nested copy',
+  );
+
+  const clickSpy = vi.fn();
+  strong!.addEventListener('click', clickSpy);
+  strong!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  expect(clickSpy).toHaveBeenCalledTimes(1);
 
   return context;
 };
@@ -491,6 +571,15 @@ describe('iteration inspector runtime edit mode', () => {
     return given(givenPreviewEditsRuntime)
       .when(whenInvalidPreviewEditsAreSynced)
       .then(thenPreviewEditFailuresAreReported)
+      .then(thenPreviewRuntimeIsStopped);
+  });
+
+  test('should restore nested child content after text preview edits are cleared', async () => {
+    return given(givenPreviewEditsRuntime)
+      .when(whenNestedTextPreviewEditIsSynced)
+      .then(thenNestedTextPreviewEditIsApplied)
+      .when(whenPreviewEditsAreCleared)
+      .then(thenNestedTextPreviewEditsRestoreOriginalChildren)
       .then(thenPreviewRuntimeIsStopped);
   });
 });

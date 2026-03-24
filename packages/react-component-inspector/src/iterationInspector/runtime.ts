@@ -1480,9 +1480,9 @@ const createPreviewPatchSession = (): PreviewPatchSession => {
       element.style.setProperty(propertyName, value);
     },
     recordTextContent: (element, value) => {
-      const previousValue = element.textContent;
+      const previousChildNodes = Array.from(element.childNodes);
       recordRestore(element, 'textContent', () => {
-        element.textContent = previousValue;
+        element.replaceChildren(...previousChildNodes);
       });
       element.textContent = value;
     },

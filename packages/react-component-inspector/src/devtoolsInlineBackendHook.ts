@@ -1,10 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./reactDevtoolsInlineBackend.d.ts" />
 
-import reactDevtoolsInlineBackend from 'react-devtools-inline/backend.js';
-
-const { initialize: initializeDevtoolsInlineBackend } =
-  reactDevtoolsInlineBackend;
+import * as reactDevtoolsInlineBackend from 'react-devtools-inline/backend.js';
 
 type WindowWithDevtoolsInlineBackendHook = Window & {
   __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown;
@@ -39,6 +36,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 
 const isDevtoolsHookLike = (value: unknown): value is DevtoolsHookLike => {
   return isRecord(value);
+};
+
+const toInitializeDevtoolsInlineBackend = () => {
+  const backendModule = reactDevtoolsInlineBackend as {
+    initialize?: ((windowOrGlobal: Window) => void) | undefined;
+    default?:
+      | {
+          initialize?: ((windowOrGlobal: Window) => void) | undefined;
+        }
+      | undefined;
+  };
+
+  const initializeCandidate =
+    backendModule.initialize ?? backendModule.default?.initialize;
+
+  return typeof initializeCandidate === 'function'
+    ? initializeCandidate
+    : undefined;
 };
 
 const tryResetPreexistingDevtoolsHook = (
@@ -142,6 +157,12 @@ export const installDevtoolsInlineBackendHook = (
   }
 
   try {
+    const initializeDevtoolsInlineBackend = toInitializeDevtoolsInlineBackend();
+
+    if (initializeDevtoolsInlineBackend === undefined) {
+      return false;
+    }
+
     tryResetPreexistingDevtoolsHook(windowWithHook);
     initializeDevtoolsInlineBackend(window);
 

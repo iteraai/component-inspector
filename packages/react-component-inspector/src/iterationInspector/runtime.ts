@@ -4,7 +4,10 @@ import {
   IterationElementSelection,
   type IterationElementLocator,
   type IterationInspectorDebugDetails,
+  iterationInspectorRuntimeCapabilities,
   IterationInspectorInvalidationReason,
+  type IterationPreviewEditError,
+  type IterationPreviewTargetEdit,
   type IterationInspectorSelectionMode,
   IterationInspectorRuntimeMessage,
   isIterationInspectorParentMessage,
@@ -51,6 +54,7 @@ type AccessibleNameOptions = {
 
 type RuntimeLifecycleReason =
   | 'command'
+  | 'preview_edits'
   | 'selection'
   | 'route_change'
   | 'reload';
@@ -61,6 +65,38 @@ type IterationElementComponentPathFields = Pick<
   IterationElementLocator,
   'componentPath' | 'reactComponentPath'
 >;
+
+type PreviewPatchRegistrar = {
+  recordAttribute: (
+    element: Element,
+    attributeName: string,
+    value: string | null,
+  ) => void;
+  recordStyle: (
+    element: HTMLElement,
+    propertyName: string,
+    value: string | null,
+  ) => void;
+  recordTextContent: (element: Element, value: string) => void;
+};
+
+type PreviewPatchSession = PreviewPatchRegistrar & {
+  clear: () => void;
+};
+
+type PreviewPatchResult = {
+  appliedTargetCount: number;
+  errors: IterationPreviewEditError[];
+};
+
+type PreviewTargetResolution =
+  | {
+      element: Element;
+    }
+  | {
+      code: 'locator_not_found' | 'url_mismatch';
+      message: string;
+    };
 
 export type IterationInspectorRuntime = {
   start: () => void;
@@ -1115,6 +1151,446 @@ const inspectableTargetsAreEqual = (
   return true;
 };
 
+const PREVIEW_DIMENSION_FIELD_IDS = new Set([
+  'width',
+  'height',
+  'minWidth',
+  'minHeight',
+  'maxWidth',
+  'maxHeight',
+  'flexBasis',
+  'gap',
+  'padding',
+  'margin',
+  'borderRadius',
+  'fontSize',
+  'borderWidth',
+]);
+
+const PREVIEW_STYLE_PROPERTY_BY_FIELD_ID = {
+  alignItems: 'align-items',
+  alignSelf: 'align-self',
+  backgroundColor: 'background-color',
+  borderColor: 'border-color',
+  borderRadius: 'border-radius',
+  borderStyle: 'border-style',
+  borderWidth: 'border-width',
+  boxShadow: 'box-shadow',
+  display: 'display',
+  flexBasis: 'flex-basis',
+  flexDirection: 'flex-direction',
+  flexGrow: 'flex-grow',
+  flexShrink: 'flex-shrink',
+  fontSize: 'font-size',
+  fontWeight: 'font-weight',
+  gap: 'gap',
+  height: 'height',
+  justifyContent: 'justify-content',
+  margin: 'margin',
+  maxHeight: 'max-height',
+  maxWidth: 'max-width',
+  minHeight: 'min-height',
+  minWidth: 'min-width',
+  opacity: 'opacity',
+  padding: 'padding',
+  textColor: 'color',
+  width: 'width',
+} as const satisfies Record<string, string>;
+
+const escapeAttributeValue = (value: string) =>
+  value.replaceAll(/\\/g, '\\\\').replaceAll(/"/g, '\\"');
+
+const getComponentPathForComparison = (element: Element, win: Window) =>
+  resolveComponentPath(element, win)?.join('>');
+
+const getExpectedComponentPath = (locator: IterationElementLocator) =>
+  locator.componentPath?.join('>') ?? locator.reactComponentPath?.join('>');
+
+const buildElementIdentityKey = (element: Element) => {
+  return [
+    element.tagName.toLowerCase(),
+    normalizeWhitespace(element.id) ?? '',
+    getDataTestId(element) ?? '',
+    buildDomPath(element),
+  ].join('|');
+};
+
+const resolveElementByDomPath = (doc: Document, domPath: string) => {
+  const segments = domPath
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length === 0) {
+    return null;
+  }
+
+  const domPathPattern = /^([a-z0-9:-]+)\[(\d+)\]$/i;
+  let current: Element | null = doc.documentElement;
+
+  for (const [index, rawSegment] of segments.entries()) {
+    const match = domPathPattern.exec(rawSegment);
+
+    if (match === null) {
+      return null;
+    }
+
+    const [, tagName, positionText] = match;
+    const position = Number(positionText);
+
+    if (!Number.isInteger(position) || position <= 0) {
+      return null;
+    }
+
+    if (index === 0) {
+      if (
+        current === null ||
+        current.tagName.toLowerCase() !== tagName.toLowerCase() ||
+        position !== 1
+      ) {
+        return null;
+      }
+
+      continue;
+    }
+
+    if (current === null) {
+      return null;
+    }
+
+    const matches: Element[] = Array.from(current.children).filter(
+      (child) => child.tagName.toLowerCase() === tagName.toLowerCase(),
+    );
+    current = matches[position - 1] ?? null;
+  }
+
+  return current;
+};
+
+const elementMatchesPreviewLocator = (
+  element: Element,
+  locator: IterationElementLocator,
+  win: Window,
+) => {
+  if (element.tagName.toLowerCase() !== locator.tagName.toLowerCase()) {
+    return false;
+  }
+
+  if (
+    locator.id !== null &&
+    normalizeWhitespace(element.getAttribute('id')) !== locator.id
+  ) {
+    return false;
+  }
+
+  if (
+    locator.dataTestId !== null &&
+    getDataTestId(element) !== locator.dataTestId
+  ) {
+    return false;
+  }
+
+  if (buildDomPath(element) !== locator.domPath) {
+    return false;
+  }
+
+  const expectedComponentPath = getExpectedComponentPath(locator);
+
+  if (
+    expectedComponentPath !== undefined &&
+    getComponentPathForComparison(element, win) !== expectedComponentPath
+  ) {
+    return false;
+  }
+
+  try {
+    return (
+      locator.cssSelector.length === 0 || element.matches(locator.cssSelector)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const resolvePreviewTargetElement = (
+  locator: IterationElementLocator,
+  doc: Document,
+  win: Window,
+): PreviewTargetResolution => {
+  if (locator.urlPath !== getUrlPath(win.location)) {
+    return {
+      code: 'url_mismatch',
+      message: 'Preview target belongs to a different page.',
+    } as const;
+  }
+
+  const candidates: Element[] = [];
+  const seenCandidates = new Set<string>();
+
+  const addCandidate = (element: Element | null | undefined) => {
+    if (element === null || element === undefined) {
+      return;
+    }
+
+    const identityKey = buildElementIdentityKey(element);
+
+    if (seenCandidates.has(identityKey)) {
+      return;
+    }
+
+    seenCandidates.add(identityKey);
+    candidates.push(element);
+  };
+
+  if (locator.id !== null) {
+    addCandidate(doc.getElementById(locator.id));
+  }
+
+  if (locator.dataTestId !== null) {
+    const selector = [
+      `[data-testid="${escapeAttributeValue(locator.dataTestId)}"]`,
+      `[data-test-id="${escapeAttributeValue(locator.dataTestId)}"]`,
+      `[data-cy="${escapeAttributeValue(locator.dataTestId)}"]`,
+    ].join(',');
+
+    try {
+      for (const match of Array.from(doc.querySelectorAll(selector))) {
+        addCandidate(match);
+      }
+    } catch {
+      // Ignore malformed selector fallback paths.
+    }
+  }
+
+  addCandidate(resolveElementByDomPath(doc, locator.domPath));
+
+  try {
+    for (const match of Array.from(doc.querySelectorAll(locator.cssSelector))) {
+      addCandidate(match);
+    }
+  } catch {
+    // Ignore malformed selector fallback paths.
+  }
+
+  const expectedComponentPath = getExpectedComponentPath(locator);
+
+  if (expectedComponentPath !== undefined) {
+    for (const candidate of Array.from(doc.querySelectorAll(locator.tagName))) {
+      if (
+        getComponentPathForComparison(candidate, win) === expectedComponentPath
+      ) {
+        addCandidate(candidate);
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (elementMatchesPreviewLocator(candidate, locator, win)) {
+      return {
+        element: candidate,
+      } as const;
+    }
+  }
+
+  return {
+    code: 'locator_not_found',
+    message: 'Preview target could not be resolved in the current DOM.',
+  } as const;
+};
+
+const normalizePreviewStyleValue = (fieldId: string, value: string) => {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return null;
+  }
+
+  if (
+    PREVIEW_DIMENSION_FIELD_IDS.has(fieldId) &&
+    /^-?\d+(\.\d+)?$/.test(trimmedValue)
+  ) {
+    return `${trimmedValue}px`;
+  }
+
+  return trimmedValue;
+};
+
+const createPreviewPatchSession = (): PreviewPatchSession => {
+  const restorers = new Map<string, () => void>();
+  let nextElementId = 0;
+  const elementIds = new WeakMap<Element, number>();
+
+  const getElementId = (element: Element) => {
+    const currentId = elementIds.get(element);
+
+    if (currentId !== undefined) {
+      return currentId;
+    }
+
+    const nextId = nextElementId;
+    nextElementId += 1;
+    elementIds.set(element, nextId);
+    return nextId;
+  };
+
+  const recordRestore = (element: Element, key: string, restore: () => void) => {
+    const restoreKey = `${getElementId(element)}:${key}`;
+
+    if (!restorers.has(restoreKey)) {
+      restorers.set(restoreKey, restore);
+    }
+  };
+
+  return {
+    recordAttribute: (element, attributeName, value) => {
+      const previousValue = element.getAttribute(attributeName);
+      recordRestore(element, `attr:${attributeName}`, () => {
+        if (previousValue === null) {
+          element.removeAttribute(attributeName);
+          return;
+        }
+
+        element.setAttribute(attributeName, previousValue);
+      });
+
+      if (value === null) {
+        element.removeAttribute(attributeName);
+        return;
+      }
+
+      element.setAttribute(attributeName, value);
+    },
+    recordStyle: (element, propertyName, value) => {
+      const previousValue = element.style.getPropertyValue(propertyName);
+      const previousPriority = element.style.getPropertyPriority(propertyName);
+      recordRestore(element, `style:${propertyName}`, () => {
+        if (previousValue.length === 0 && previousPriority.length === 0) {
+          element.style.removeProperty(propertyName);
+          return;
+        }
+
+        element.style.setProperty(propertyName, previousValue, previousPriority);
+      });
+
+      if (value === null) {
+        element.style.removeProperty(propertyName);
+        return;
+      }
+
+      element.style.setProperty(propertyName, value);
+    },
+    recordTextContent: (element, value) => {
+      const previousChildNodes = Array.from(element.childNodes);
+      recordRestore(element, 'textContent', () => {
+        element.replaceChildren(...previousChildNodes);
+      });
+      element.textContent = value;
+    },
+    clear: () => {
+      for (const restore of Array.from(restorers.values()).reverse()) {
+        restore();
+      }
+
+      restorers.clear();
+    },
+  };
+};
+
+const applyPreviewOperation = (
+  element: Element,
+  operation: IterationPreviewTargetEdit['operations'][number],
+  previewSession: PreviewPatchRegistrar,
+) => {
+  const trimmedValue = operation.value.trim();
+
+  if (trimmedValue.length === 0) {
+    return {
+      code: 'invalid_value',
+      message: 'Preview edit value must be non-empty.',
+    } as const;
+  }
+
+  if (operation.fieldId === 'textContent') {
+    previewSession.recordTextContent(element, operation.value);
+    return null;
+  }
+
+  if (operation.fieldId === 'assetReference') {
+    if (element instanceof HTMLImageElement) {
+      previewSession.recordAttribute(element, 'src', operation.value);
+      previewSession.recordAttribute(element, 'srcset', operation.value);
+      return null;
+    }
+
+    if (element instanceof HTMLSourceElement) {
+      if (element.hasAttribute('srcset')) {
+        previewSession.recordAttribute(element, 'srcset', operation.value);
+        return null;
+      }
+
+      previewSession.recordAttribute(element, 'src', operation.value);
+      return null;
+    }
+
+    if (
+      element instanceof HTMLIFrameElement ||
+      element instanceof HTMLVideoElement ||
+      element instanceof HTMLAudioElement
+    ) {
+      previewSession.recordAttribute(element, 'src', operation.value);
+      return null;
+    }
+
+    if (element instanceof HTMLElement) {
+      previewSession.recordStyle(
+        element,
+        'background-image',
+        `url("${operation.value.replaceAll('"', '\\"')}")`,
+      );
+      return null;
+    }
+
+    return {
+      code: 'unsupported_target',
+      message: 'Preview asset swaps are not supported for this target.',
+    } as const;
+  }
+
+  const stylePropertyName =
+    PREVIEW_STYLE_PROPERTY_BY_FIELD_ID[
+      operation.fieldId as keyof typeof PREVIEW_STYLE_PROPERTY_BY_FIELD_ID
+    ];
+
+  if (stylePropertyName === undefined) {
+    return {
+      code: 'unsupported_field',
+      message: `Preview edits do not support field "${operation.fieldId}" yet.`,
+    } as const;
+  }
+
+  if (!(element instanceof HTMLElement)) {
+    return {
+      code: 'unsupported_target',
+      message: 'Preview style edits require an HTMLElement target.',
+    } as const;
+  }
+
+  const normalizedStyleValue = normalizePreviewStyleValue(
+    operation.fieldId,
+    operation.value,
+  );
+
+  if (normalizedStyleValue === null) {
+    return {
+      code: 'invalid_value',
+      message: `Preview edits require a non-empty value for "${operation.fieldId}".`,
+    } as const;
+  }
+
+  previewSession.recordStyle(element, stylePropertyName, normalizedStyleValue);
+  return null;
+};
+
 export const createIterationInspectorRuntime = ({
   allowSelfMessaging = false,
   win = window,
@@ -1136,6 +1612,7 @@ export const createIterationInspectorRuntime = ({
   let removePatchedHistoryListeners: (() => void) | null = null;
   let hasLoggedIgnoredOverlayMutation = false;
   let selectionMode: IterationInspectorSelectionMode = 'single';
+  let previewPatchSession: PreviewPatchSession | null = null;
   const canPostToParent = allowSelfMessaging || win.parent !== win;
 
   type IterationInspectorDebugLogInput =
@@ -1295,6 +1772,80 @@ export const createIterationInspectorRuntime = ({
     }
   };
 
+  const clearPreviewEdits = () => {
+    previewPatchSession?.clear();
+    previewPatchSession = null;
+    handleScrollOrResize();
+  };
+
+  const emitPreviewEditsStatus = (
+    revision: number,
+    result: PreviewPatchResult,
+  ) => {
+    emit({
+      channel: ITERATION_INSPECTOR_CHANNEL,
+      kind: 'preview_edits_status',
+      revision,
+      appliedTargetCount: result.appliedTargetCount,
+      ...(result.errors.length > 0 ? { errors: result.errors } : {}),
+    });
+  };
+
+  const syncPreviewEdits = (
+    revision: number,
+    targets: ReadonlyArray<IterationPreviewTargetEdit>,
+  ) => {
+    clearPreviewEdits();
+    const nextPreviewPatchSession = createPreviewPatchSession();
+    const result: PreviewPatchResult = {
+      appliedTargetCount: 0,
+      errors: [],
+    };
+
+    for (const [targetIndex, targetEdit] of targets.entries()) {
+      const resolution = resolvePreviewTargetElement(targetEdit.locator, doc, win);
+
+      if ('code' in resolution) {
+        result.errors.push({
+          code: resolution.code,
+          message: resolution.message,
+          targetIndex,
+        });
+        continue;
+      }
+
+      let targetApplied = false;
+
+      for (const operation of targetEdit.operations) {
+        const operationError = applyPreviewOperation(
+          resolution.element,
+          operation,
+          nextPreviewPatchSession,
+        );
+
+        if (operationError !== null) {
+          result.errors.push({
+            code: operationError.code,
+            message: operationError.message,
+            targetIndex,
+            fieldId: operation.fieldId,
+          });
+          continue;
+        }
+
+        targetApplied = true;
+      }
+
+      if (targetApplied) {
+        result.appliedTargetCount += 1;
+      }
+    }
+
+    previewPatchSession = nextPreviewPatchSession;
+    handleScrollOrResize();
+    emitPreviewEditsStatus(revision, result);
+  };
+
   const emitSelection = (
     target: InspectableTarget,
     event: Event,
@@ -1438,6 +1989,8 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleRouteChange = () => {
+    clearPreviewEdits();
+
     if (!active) {
       return;
     }
@@ -1522,6 +2075,20 @@ export const createIterationInspectorRuntime = ({
 
     if (event.data.kind === 'exit_select_mode') {
       setActive(false);
+      return;
+    }
+
+    if (event.data.kind === 'sync_preview_edits') {
+      syncPreviewEdits(event.data.revision, event.data.targets);
+      return;
+    }
+
+    if (event.data.kind === 'clear_preview_edits') {
+      clearPreviewEdits();
+      emitPreviewEditsStatus(event.data.revision, {
+        appliedTargetCount: 0,
+        errors: [],
+      });
       return;
     }
 
@@ -1780,6 +2347,8 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleBeforeUnload = () => {
+    clearPreviewEdits();
+
     if (!active) {
       return;
     }
@@ -1839,6 +2408,7 @@ export const createIterationInspectorRuntime = ({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: getUrlPath(win.location),
+        capabilities: [...iterationInspectorRuntimeCapabilities],
       });
     },
     stop: () => {
@@ -1852,6 +2422,7 @@ export const createIterationInspectorRuntime = ({
       parentOrigin = null;
       debugEnabled = false;
       debugSessionId = null;
+      clearPreviewEdits();
       clearPendingSelectionState();
       clearHover();
       removePatchedHistoryListeners?.();

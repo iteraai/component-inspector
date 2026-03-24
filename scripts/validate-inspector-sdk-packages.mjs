@@ -44,6 +44,22 @@ const sdkPackages = [
       'dist/iterationInspector/index.d.ts',
       'package.json'
     ]
+  },
+  {
+    directory: path.join(repoRoot, 'packages/vue-component-inspector'),
+    name: '@iteraai/vue-component-inspector',
+    requiredFiles: [
+      'README.md',
+      'dist/index.js',
+      'dist/index.d.ts',
+      'dist/embeddedBootstrap.js',
+      'dist/embeddedBootstrap.d.ts',
+      'dist/bridgeRuntime.js',
+      'dist/bridgeRuntime.d.ts',
+      'dist/iterationInspector.js',
+      'dist/iterationInspector/index.d.ts',
+      'package.json'
+    ]
   }
 ];
 
@@ -109,15 +125,21 @@ const packPackage = (packageDefinition, packDestination) => {
   return path.join(packDestination, packResult.filename);
 };
 
-const fixturePackageJson = (protocolTarball, bridgeTarball) => ({
+const fixturePackageJson = (
+  protocolTarball,
+  reactBridgeTarball,
+  vueBridgeTarball,
+) => ({
   name: 'inspector-sdk-pack-smoke',
   private: true,
   type: 'module',
   dependencies: {
     '@iteraai/inspector-protocol': `file:${protocolTarball}`,
-    '@iteraai/react-component-inspector': `file:${bridgeTarball}`,
-    react: '19.2.3',
-    'react-dom': '19.2.3'
+    '@iteraai/react-component-inspector': `file:${reactBridgeTarball}`,
+    '@iteraai/vue-component-inspector': `file:${vueBridgeTarball}`,
+    react: '19.2.4',
+    'react-dom': '19.2.4',
+    vue: '^3.5.0'
   },
   devDependencies: {
     typescript: '~5.6.2'
@@ -150,11 +172,20 @@ import {
   type ReactInspectorRuntimeConfig,
 } from '@iteraai/react-component-inspector';
 import { bootstrapEmbeddedInspectorBridge } from '@iteraai/react-component-inspector/embeddedBootstrap';
-import { initInspectorBridge } from '@iteraai/react-component-inspector/bridgeRuntime';
+import { initInspectorBridge as initReactInspectorBridge } from '@iteraai/react-component-inspector/bridgeRuntime';
 import {
-  ITERATION_INSPECTOR_CHANNEL,
-  type IterationInspectorRuntimeMessage,
+  ITERATION_INSPECTOR_CHANNEL as REACT_ITERATION_INSPECTOR_CHANNEL,
+  type IterationInspectorRuntimeMessage as ReactIterationInspectorRuntimeMessage,
 } from '@iteraai/react-component-inspector/iterationInspector';
+import {
+  resolveVueInspectorRuntimeConfig,
+} from '@iteraai/vue-component-inspector';
+import { bootstrapEmbeddedInspectorBridgeOnMount } from '@iteraai/vue-component-inspector/embeddedBootstrap';
+import { initInspectorBridge as initVueInspectorBridge } from '@iteraai/vue-component-inspector/bridgeRuntime';
+import {
+  ITERATION_INSPECTOR_CHANNEL as VUE_ITERATION_INSPECTOR_CHANNEL,
+  type IterationInspectorRuntimeMessage as VueIterationInspectorRuntimeMessage,
+} from '@iteraai/vue-component-inspector/iterationInspector';
 
 const ping: InspectorMessage<'PING'> = buildMessage('PING', { sentAt: 1 });
 const treeNode: TreeNode = {
@@ -168,24 +199,45 @@ const runtimeConfig: ReactInspectorRuntimeConfig = {
     tree: false,
   },
 };
-const runtimeMessage: IterationInspectorRuntimeMessage = {
-  channel: ITERATION_INSPECTOR_CHANNEL,
+const runtimeMessage: ReactIterationInspectorRuntimeMessage = {
+  channel: REACT_ITERATION_INSPECTOR_CHANNEL,
   kind: 'runtime_ready',
   urlPath: '/',
 };
 const bootstrapFn: typeof bootstrapEmbeddedInspectorBridge =
   bootstrapEmbeddedInspectorBridge;
-const initBridgeFn: typeof initInspectorBridge = initInspectorBridge;
+const initBridgeFn: typeof initReactInspectorBridge = initReactInspectorBridge;
+const vueRuntimeConfig: Parameters<typeof resolveVueInspectorRuntimeConfig>[0] = {
+  adapter: 'vue3',
+  mountedAppDiscovery: {
+    strategy: 'explicit-only',
+  },
+};
+const vueRuntimeMessage: VueIterationInspectorRuntimeMessage = {
+  channel: VUE_ITERATION_INSPECTOR_CHANNEL,
+  kind: 'runtime_ready',
+  urlPath: '/',
+};
+const vueBootstrapFn: typeof bootstrapEmbeddedInspectorBridgeOnMount =
+  bootstrapEmbeddedInspectorBridgeOnMount;
+const initVueBridgeFn: typeof initVueInspectorBridge = initVueInspectorBridge;
 const protocolError = createInspectorProtocolError('ERR_NODE_NOT_FOUND');
 const resolvedOrigin = normalizeOrigin('https://itera.ai/path');
 const isPingMessage = isInspectorMessage(ping);
 const resolvedRuntimeConfig = resolveReactInspectorRuntimeConfig(runtimeConfig);
+const resolvedVueRuntimeConfig = resolveVueInspectorRuntimeConfig(
+  vueRuntimeConfig,
+);
 
 void treeNode;
 void runtimeMessage;
 void bootstrapFn;
 void initBridgeFn;
+void vueRuntimeMessage;
+void vueBootstrapFn;
+void initVueBridgeFn;
 void resolvedRuntimeConfig;
+void resolvedVueRuntimeConfig;
 
 if (!isPingMessage || protocolError.code !== 'ERR_NODE_NOT_FOUND') {
   throw new Error('Protocol smoke typing failed.');
@@ -210,11 +262,25 @@ import {
   resolveReactInspectorRuntimeConfig,
 } from '@iteraai/react-component-inspector';
 import { bootstrapEmbeddedInspectorBridge } from '@iteraai/react-component-inspector/embeddedBootstrap';
-import { initInspectorBridge } from '@iteraai/react-component-inspector/bridgeRuntime';
+import { initInspectorBridge as initReactInspectorBridge } from '@iteraai/react-component-inspector/bridgeRuntime';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   isIterationInspectorRuntimeMessage,
 } from '@iteraai/react-component-inspector/iterationInspector';
+import {
+  defaultVueInspectorRuntimeConfig,
+  defaultVueMountedAppDiscovery,
+  resolveVueInspectorRuntimeConfig,
+  vueInspectorMountedAppDiscoveryStrategies,
+  vueInspectorRuntimeAdapterTargets,
+} from '@iteraai/vue-component-inspector';
+import { bootstrapEmbeddedInspectorBridgeOnMount } from '@iteraai/vue-component-inspector/embeddedBootstrap';
+import { initInspectorBridge as initVueInspectorBridge } from '@iteraai/vue-component-inspector/bridgeRuntime';
+import {
+  ITERATION_INSPECTOR_CHANNEL as VUE_ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorParentMessage as isVueIterationInspectorParentMessage,
+  isIterationInspectorRuntimeMessage as isVueIterationInspectorRuntimeMessage,
+} from '@iteraai/vue-component-inspector/iterationInspector';
 
 const pingMessage = buildMessage(
   'PING',
@@ -265,10 +331,71 @@ assert.deepEqual(
   },
 );
 assert.equal(typeof bootstrapEmbeddedInspectorBridge, 'function');
-assert.equal(typeof initInspectorBridge, 'function');
+assert.equal(typeof initReactInspectorBridge, 'function');
 assert.equal(
   isIterationInspectorRuntimeMessage({
     channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'runtime_ready',
+    urlPath: '/preview',
+  }),
+  true,
+);
+assert.deepEqual(vueInspectorRuntimeAdapterTargets, ['auto', 'vue3']);
+assert.deepEqual(vueInspectorMountedAppDiscoveryStrategies, [
+  'auto',
+  'explicit-only',
+  'dom-only',
+]);
+assert.deepEqual(defaultVueMountedAppDiscovery, {
+  strategy: 'auto',
+  containerSelector: '[data-v-app]',
+});
+assert.equal(defaultVueInspectorRuntimeConfig.adapter, 'auto');
+assert.deepEqual(defaultVueInspectorRuntimeConfig.capabilities, {
+  tree: true,
+  props: true,
+  highlight: true,
+});
+assert.equal(
+  typeof defaultVueInspectorRuntimeConfig.appRegistry.getMountedApps,
+  'function',
+);
+assert.deepEqual(
+  resolveVueInspectorRuntimeConfig({
+    adapter: 'vue3',
+    capabilities: {
+      props: false,
+    },
+    mountedAppDiscovery: {
+      strategy: 'explicit-only',
+    },
+  }),
+  {
+    adapter: 'vue3',
+    capabilities: {
+      tree: true,
+      props: false,
+      highlight: true,
+    },
+    appRegistry: defaultVueInspectorRuntimeConfig.appRegistry,
+    mountedAppDiscovery: {
+      strategy: 'explicit-only',
+      containerSelector: '[data-v-app]',
+    },
+  },
+);
+assert.equal(typeof bootstrapEmbeddedInspectorBridgeOnMount, 'function');
+assert.equal(typeof initVueInspectorBridge, 'function');
+assert.equal(
+  isVueIterationInspectorParentMessage({
+    channel: VUE_ITERATION_INSPECTOR_CHANNEL,
+    kind: 'enter_select_mode',
+  }),
+  true,
+);
+assert.equal(
+  isVueIterationInspectorRuntimeMessage({
+    channel: VUE_ITERATION_INSPECTOR_CHANNEL,
     kind: 'runtime_ready',
     urlPath: '/preview',
   }),
@@ -288,12 +415,17 @@ const main = () => {
 
   try {
     const protocolTarball = packPackage(sdkPackages[0], packDestination);
-    const bridgeTarball = packPackage(sdkPackages[1], packDestination);
+    const reactBridgeTarball = packPackage(sdkPackages[1], packDestination);
+    const vueBridgeTarball = packPackage(sdkPackages[2], packDestination);
 
     fs.writeFileSync(
       path.join(fixtureDirectory, 'package.json'),
       `${JSON.stringify(
-        fixturePackageJson(protocolTarball, bridgeTarball),
+        fixturePackageJson(
+          protocolTarball,
+          reactBridgeTarball,
+          vueBridgeTarball,
+        ),
         null,
         2,
       )}\n`,

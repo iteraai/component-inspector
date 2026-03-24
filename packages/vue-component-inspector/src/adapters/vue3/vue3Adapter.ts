@@ -1,6 +1,9 @@
 import { createBaseInspectorAdapter } from '../base/baseAdapter';
 import type { InspectorAdapterContract, VueMountedAppRecord } from '../base/types';
+import { resolveVueHighlightTarget } from './highlightTarget';
 import { createVueNodeIdentityAllocator } from './nodeIdentity';
+import { createVueNodeLookup } from './nodeLookup';
+import { readVueNodeProps } from './props';
 import { mapVueTraversalToTreeSnapshot } from './treeMapping';
 import { traverseVueMountedApps } from './traversal';
 
@@ -12,20 +15,62 @@ export const createVue3InspectorAdapter = (
   options: CreateVue3InspectorAdapterOptions,
 ): InspectorAdapterContract => {
   const nodeIdentityAllocator = createVueNodeIdentityAllocator();
+  const nodeLookup = createVueNodeLookup();
 
-  const readSnapshot = () => {
+  const captureSnapshot = () => {
     const traversalResult = traverseVueMountedApps(options.getMountedApps());
-    const { nodeIdByRecordKey } = nodeIdentityAllocator.allocateNodeIds(
+    const nodeIdentityResult = nodeIdentityAllocator.allocateNodeIds(
       traversalResult.records,
     );
-
-    return mapVueTraversalToTreeSnapshot({
+    const snapshot = mapVueTraversalToTreeSnapshot({
       traversalResult,
-      nodeIdByRecordKey,
+      nodeIdByRecordKey: nodeIdentityResult.nodeIdByRecordKey,
     });
+
+    nodeLookup.refreshFromSnapshot({
+      traversalResult,
+      nodeIdByRecordKey: nodeIdentityResult.nodeIdByRecordKey,
+      snapshot,
+    });
+
+    return snapshot;
+  };
+
+  const resolveLookupPayload = (nodeId: string) => {
+    try {
+      return nodeLookup.resolveByNodeId(nodeId);
+    } catch {
+      return undefined;
+    }
   };
 
   return createBaseInspectorAdapter({
-    getTreeSnapshot: () => readSnapshot(),
+    getTreeSnapshot: () => captureSnapshot(),
+    getNodeProps: ({ node }) => {
+      const lookupPayload = resolveLookupPayload(node.id);
+
+      if (lookupPayload === undefined) {
+        return undefined;
+      }
+
+      try {
+        return readVueNodeProps(lookupPayload);
+      } catch {
+        return {};
+      }
+    },
+    getDomElement: ({ node }) => {
+      const lookupPayload = resolveLookupPayload(node.id);
+
+      if (lookupPayload === undefined) {
+        return null;
+      }
+
+      try {
+        return resolveVueHighlightTarget(lookupPayload);
+      } catch {
+        return null;
+      }
+    },
   });
 };

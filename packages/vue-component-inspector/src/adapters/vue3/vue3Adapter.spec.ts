@@ -82,6 +82,72 @@ afterEach(() => {
 });
 
 describe('vue3Adapter', () => {
+  test('returns stable component props payloads and resolves highlight targets for DOM and fragment roots', () => {
+    const PropsLeaf = defineComponent({
+      name: 'PropsLeaf',
+      props: {
+        title: {
+          type: String,
+          required: true,
+        },
+        count: {
+          type: Number,
+          required: true,
+        },
+      },
+      setup: (props) => () =>
+        h('button', { id: 'props-leaf-button' }, `${props.title}:${props.count}`),
+    });
+    const FragmentLeaf = defineComponent({
+      name: 'FragmentLeaf',
+      props: {
+        marker: {
+          type: String,
+          required: true,
+        },
+      },
+      setup: (props) => () => [
+        h('span', { id: `${props.marker}-first` }, 'first'),
+        h('span', { id: `${props.marker}-second` }, 'second'),
+      ],
+    });
+    const TreeRoot = defineComponent({
+      name: 'HighlightAndPropsTreeRoot',
+      setup: () =>
+        () =>
+          h('main', [
+            h(PropsLeaf, {
+              title: 'Toolbar',
+              count: 2,
+            }),
+            h(FragmentLeaf, {
+              marker: 'fragment-leaf',
+            }),
+          ]),
+    });
+    const { app, adapter } = createMountedAdapter(TreeRoot);
+    const firstSnapshot = adapter.getTreeSnapshot();
+    const secondSnapshot = adapter.getTreeSnapshot();
+    const firstNodeByName = toNodeByDisplayName(firstSnapshot);
+    const propsLeafNodeId = firstNodeByName.get('PropsLeaf')?.id as string;
+    const fragmentLeafNodeId = firstNodeByName.get('FragmentLeaf')?.id as string;
+
+    expect(firstSnapshot).toEqual(secondSnapshot);
+    expect(adapter.getNodeProps(propsLeafNodeId)).toEqual({
+      title: 'Toolbar',
+      count: 2,
+    });
+    expect(adapter.getNodeProps(fragmentLeafNodeId)).toEqual({
+      marker: 'fragment-leaf',
+    });
+    expect(adapter.getDomElement(propsLeafNodeId)?.id).toBe('props-leaf-button');
+    expect(adapter.getDomElement(fragmentLeafNodeId)?.id).toBe(
+      'fragment-leaf-first',
+    );
+
+    app.unmount();
+  });
+
   test('walks fragment children and keeps node ids deterministic across repeated reads', () => {
     const FragmentLeaf = Object.assign(
       defineComponent({
@@ -271,5 +337,37 @@ describe('vue3Adapter', () => {
     expect(nodeByName.get('FirstChild')?.id).not.toBe(
       nodeByName.get('SecondChild')?.id,
     );
+  });
+
+  test('fails soft for missing and stale node ids after the component tree changes', async () => {
+    const showLeaf = ref(true);
+    const ConditionalLeaf = defineComponent({
+      name: 'ConditionalLeaf',
+      setup: () => () => h('div', { id: 'conditional-leaf' }, 'leaf'),
+    });
+    const TreeRoot = defineComponent({
+      name: 'ConditionalTreeRoot',
+      setup: () => () => h('main', [showLeaf.value ? h(ConditionalLeaf) : null]),
+    });
+    const { app, adapter } = createMountedAdapter(TreeRoot);
+    const firstSnapshot = adapter.getTreeSnapshot();
+    const conditionalLeafNodeId = firstSnapshot.nodes.find(
+      (node) => node.displayName === 'ConditionalLeaf',
+    )?.id;
+
+    showLeaf.value = false;
+    await nextTick();
+
+    const secondSnapshot = adapter.getTreeSnapshot();
+
+    expect(secondSnapshot.nodes.some((node) => node.id === conditionalLeafNodeId)).toBe(
+      false,
+    );
+    expect(adapter.getNodeProps(conditionalLeafNodeId as string)).toBeUndefined();
+    expect(adapter.getDomElement(conditionalLeafNodeId as string)).toBeNull();
+    expect(adapter.getNodeProps('missing-node-id')).toBeUndefined();
+    expect(adapter.getDomElement('missing-node-id')).toBeNull();
+
+    app.unmount();
   });
 });

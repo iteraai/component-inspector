@@ -15,6 +15,30 @@ export {
   vueInspectorRuntimeAdapterTargets,
 } from './adapters/base';
 export {
+  destroyInspectorBridge,
+  initInspectorBridge,
+  type InitInspectorBridgeOptions,
+  type InspectorBridgeRequestHandlers,
+} from './bridgeRuntime';
+export {
   registerVueAppOnMount,
   type RegisterVueAppOnMountOptions,
 } from './embeddedBootstrap';
+export {
+  ITERATION_INSPECTOR_CHANNEL,
+  bootIterationInspectorRuntime,
+  buildIterationElementSelection,
+  createIterationInspectorRuntime,
+  isIterationInspectorParentMessage,
+  isIterationInspectorRuntimeMessage,
+  type IterationElementBounds,
+  type IterationElementLocator,
+  type IterationElementSelection,
+  type IterationInspectorDebugDetails,
+  type IterationInspectorInvalidationReason,
+  type IterationInspectorParentMessage,
+  type IterationInspectorRuntime,
+  type IterationInspectorRuntimeMessage,
+  type IterationInspectorSelectionMode,
+  type IterationScrollOffset,
+} from './iterationInspector';

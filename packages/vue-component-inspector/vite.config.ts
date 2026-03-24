@@ -5,12 +5,30 @@ import dts from 'vite-plugin-dts';
 const entryPoints = {
   index: path.resolve(__dirname, 'src/index.ts'),
   embeddedBootstrap: path.resolve(__dirname, 'src/embeddedBootstrap.ts'),
+  bridgeRuntime: path.resolve(__dirname, 'src/bridgeRuntime.ts'),
+  iterationInspector: path.resolve(
+    __dirname,
+    'src/iterationInspector/index.ts',
+  ),
 };
 
 const protocolSourcePath = path.resolve(
   __dirname,
   '../inspector-protocol/src/index.ts',
 );
+const vuePackageBridgeRuntimeSourcePath = path.resolve(
+  __dirname,
+  'src/bridgeRuntime.ts',
+);
+const vuePackageEmbeddedBootstrapSourcePath = path.resolve(
+  __dirname,
+  'src/embeddedBootstrap.ts',
+);
+const vuePackageIterationInspectorSourcePath = path.resolve(
+  __dirname,
+  'src/iterationInspector/index.ts',
+);
+const vuePackageIndexSourcePath = path.resolve(__dirname, 'src/index.ts');
 
 export default defineConfig({
   build: {
@@ -53,6 +71,13 @@ export default defineConfig({
       ...(process.env.VITEST
         ? {
             '@iteraai/inspector-protocol': protocolSourcePath,
+            '@iteraai/vue-component-inspector/bridgeRuntime':
+              vuePackageBridgeRuntimeSourcePath,
+            '@iteraai/vue-component-inspector/embeddedBootstrap':
+              vuePackageEmbeddedBootstrapSourcePath,
+            '@iteraai/vue-component-inspector/iterationInspector':
+              vuePackageIterationInspectorSourcePath,
+            '@iteraai/vue-component-inspector': vuePackageIndexSourcePath,
           }
         : {}),
     },

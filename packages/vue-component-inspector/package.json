@@ -19,6 +19,14 @@
     "./embeddedBootstrap": {
       "types": "./dist/embeddedBootstrap.d.ts",
       "import": "./dist/embeddedBootstrap.js"
+    },
+    "./bridgeRuntime": {
+      "types": "./dist/bridgeRuntime.d.ts",
+      "import": "./dist/bridgeRuntime.js"
+    },
+    "./iterationInspector": {
+      "types": "./dist/iterationInspector/index.d.ts",
+      "import": "./dist/iterationInspector.js"
     }
   },
   "repository": {

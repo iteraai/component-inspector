@@ -5,8 +5,14 @@
     "paths": {
       "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"],
       "@iteraai/vue-component-inspector": ["./src/index.ts"],
+      "@iteraai/vue-component-inspector/bridgeRuntime": [
+        "./src/bridgeRuntime.ts"
+      ],
       "@iteraai/vue-component-inspector/embeddedBootstrap": [
         "./src/embeddedBootstrap.ts"
+      ],
+      "@iteraai/vue-component-inspector/iterationInspector": [
+        "./src/iterationInspector/index.ts"
       ]
     },
     "types": ["vitest/globals", "node"]

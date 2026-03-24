@@ -27,6 +27,19 @@ const createMountedAdapter = (appDefinition: Parameters<typeof createApp>[0]) =>
   };
 };
 
+const stripVueDomMarkers = (root: ParentNode) => {
+  root.querySelectorAll('*').forEach((element) => {
+    Reflect.deleteProperty(
+      element as Element & Record<string, unknown>,
+      '__vueParentComponent',
+    );
+    Reflect.deleteProperty(
+      element as Element & Record<string, unknown>,
+      '__vnode',
+    );
+  });
+};
+
 const toNodeByDisplayName = (
   snapshot: ReturnType<ReturnType<typeof createVueInspectorAdapter>['getTreeSnapshot']>,
 ) => {
@@ -190,6 +203,72 @@ describe('vue3Adapter', () => {
     expect(fragmentLeafNodes.every((node) => node.source?.file === 'src/FragmentLeaf.vue')).toBe(
       true,
     );
+
+    app.unmount();
+  });
+
+  test('resolves stable component paths for DOM selections with and without Vue DOM markers', () => {
+    const ToolbarButton = defineComponent({
+      name: 'ToolbarButton',
+      setup: () =>
+        () =>
+          h('button', { id: 'toolbar-button' }, [
+            h('span', { id: 'toolbar-label' }, 'save'),
+          ]),
+    });
+    const TreeRoot = defineComponent({
+      name: 'SelectionTreeRoot',
+      setup: () => () => h('main', [h(ToolbarButton)]),
+    });
+    const { app, adapter } = createMountedAdapter(TreeRoot);
+    const toolbarLabel = document.getElementById('toolbar-label') as HTMLElement;
+    const mountedRoot = document.querySelector('main') as HTMLElement;
+
+    expect(adapter.getComponentPathForElement?.(toolbarLabel)).toEqual([
+      'SelectionTreeRoot',
+      'ToolbarButton',
+    ]);
+
+    stripVueDomMarkers(mountedRoot.parentElement as ParentNode);
+
+    expect(adapter.getComponentPathForElement?.(toolbarLabel)).toEqual([
+      'SelectionTreeRoot',
+      'ToolbarButton',
+    ]);
+
+    app.unmount();
+  });
+
+  test('resolves fragment component paths from any root element when Vue DOM markers are absent', () => {
+    const FragmentToolbar = defineComponent({
+      name: 'FragmentToolbar',
+      setup: () =>
+        () => [
+          h('button', { id: 'fragment-action-primary' }, 'save'),
+          h('button', { id: 'fragment-action-secondary' }, 'cancel'),
+        ],
+    });
+    const TreeRoot = defineComponent({
+      name: 'FragmentSelectionRoot',
+      setup: () => () => h('main', [h(FragmentToolbar)]),
+    });
+    const { app, adapter } = createMountedAdapter(TreeRoot);
+    const mountedRoot = document.querySelector('main') as HTMLElement;
+    const secondaryAction = document.getElementById(
+      'fragment-action-secondary',
+    ) as HTMLElement;
+
+    expect(adapter.getComponentPathForElement?.(secondaryAction)).toEqual([
+      'FragmentSelectionRoot',
+      'FragmentToolbar',
+    ]);
+
+    stripVueDomMarkers(mountedRoot.parentElement as ParentNode);
+
+    expect(adapter.getComponentPathForElement?.(secondaryAction)).toEqual([
+      'FragmentSelectionRoot',
+      'FragmentToolbar',
+    ]);
 
     app.unmount();
   });

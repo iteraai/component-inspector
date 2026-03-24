@@ -107,9 +107,20 @@ const appendVNodesInOrder = (
   }
 };
 
-const findFirstElementFromVNode = (entryVNode: VueVNodeLike) => {
+const collectRootElementsFromVNode = (entryVNode: VueVNodeLike) => {
   const stack: VueVNodeLike[] = [entryVNode];
+  const rootElements: Element[] = [];
+  const seenRootElements = new WeakSet<object>();
   const visitedVNodes = new Set<unknown>();
+
+  const appendRootElement = (element: Element) => {
+    if (seenRootElements.has(element)) {
+      return;
+    }
+
+    seenRootElements.add(element);
+    rootElements.push(element);
+  };
 
   while (stack.length > 0) {
     const currentVNode = stack.pop();
@@ -123,7 +134,8 @@ const findFirstElementFromVNode = (entryVNode: VueVNodeLike) => {
     const directElement = readVNodeElement(currentVNode);
 
     if (directElement !== undefined) {
-      return directElement;
+      appendRootElement(directElement);
+      continue;
     }
 
     const component = readVNodeComponent(currentVNode);
@@ -145,23 +157,29 @@ const findFirstElementFromVNode = (entryVNode: VueVNodeLike) => {
     appendVNodesInOrder(stack, toVNodeChildren(currentVNode));
   }
 
-  return undefined;
+  return rootElements;
 };
 
-export const resolveVueHighlightTarget = (
+export const resolveVueComponentRootElements = (
   lookupPayload: VueNodeLookupPayload,
-): Element | null => {
+): ReadonlyArray<Element> => {
   const instance = toComponentInstance(lookupPayload.instance);
 
   if (instance === undefined) {
-    return null;
+    return [];
   }
 
   const entryVNode = readInstanceSubTree(instance) ?? readInstanceVNode(instance);
 
   if (entryVNode === undefined) {
-    return null;
+    return [];
   }
 
-  return findFirstElementFromVNode(entryVNode) ?? null;
+  return collectRootElementsFromVNode(entryVNode);
+};
+
+export const resolveVueHighlightTarget = (
+  lookupPayload: VueNodeLookupPayload,
+): Element | null => {
+  return resolveVueComponentRootElements(lookupPayload)[0] ?? null;
 };

@@ -1,9 +1,14 @@
 import {
-  createBaseReactInspectorAdapter,
-  type ReactTreeSnapshot,
+  createBaseInspectorAdapter,
+  type InspectorTreeSnapshot,
 } from './baseAdapter';
+import {
+  toInspectorTreeAdapter,
+  toReactTreeAdapter,
+} from '../../inspectorTreeAdapter';
 import { resolveReactInspectorRuntimeConfig } from './runtimeConfig';
 import type {
+  InspectorAdapterContract,
   ReactInspectorAdapterContract,
   ReactInspectorRuntimeConfig,
   ReactInspectorRuntimeAdapterTarget,
@@ -21,13 +26,13 @@ import {
   type EmbeddedBridgeTelemetryHooks,
 } from '../../security/bridgeTelemetry';
 
-const emptyTreeSnapshot: ReactTreeSnapshot = {
+const emptyTreeSnapshot: InspectorTreeSnapshot = {
   nodes: [],
   rootIds: [],
 };
 
-const createNoopAdapter = () => {
-  return createBaseReactInspectorAdapter({
+const createNoopAdapter = (): InspectorAdapterContract => {
+  return createBaseInspectorAdapter({
     getTreeSnapshot: () => emptyTreeSnapshot,
   });
 };
@@ -43,7 +48,7 @@ export type CreateReactInspectorAdapterOptions = Readonly<{
   telemetry?: EmbeddedBridgeTelemetryHooks;
 }>;
 
-const hasNonEmptyTreeSnapshot = (snapshot: ReactTreeSnapshot) => {
+const hasNonEmptyTreeSnapshot = (snapshot: InspectorTreeSnapshot) => {
   return snapshot.nodes.length > 0;
 };
 
@@ -93,7 +98,7 @@ const toTagFallbackTargets = (preferredTarget: TagAdapterTarget) => {
   return fallbackTargets;
 };
 
-const toSafeTreeSnapshot = (adapter: ReactInspectorAdapterContract) => {
+const toSafeTreeSnapshot = (adapter: InspectorAdapterContract) => {
   try {
     return adapter.getTreeSnapshot();
   } catch {
@@ -105,10 +110,12 @@ const resolveFiberFallbackAdapter = () => {
   const preferredTarget = resolveLikelyTagAdapterTarget();
 
   for (const fallbackTarget of toTagFallbackTargets(preferredTarget)) {
-    let fallbackAdapter: ReactInspectorAdapterContract;
+    let fallbackAdapter: InspectorAdapterContract;
 
     try {
-      fallbackAdapter = createTagAdapter(fallbackTarget);
+      fallbackAdapter = toInspectorTreeAdapter(
+        createTagAdapter(fallbackTarget),
+      );
     } catch {
       continue;
     }
@@ -135,7 +142,7 @@ const resolveFiberFallbackAdapter = () => {
 };
 
 const toFiberFallbackReasonCode = (
-  fiberSnapshot: ReactTreeSnapshot | undefined,
+  fiberSnapshot: InspectorTreeSnapshot | undefined,
   diagnostics: FiberAdapterSnapshotDiagnostics | undefined,
 ): EmbeddedBridgeFiberFallbackReasonCode => {
   if (fiberSnapshot === undefined) {
@@ -159,13 +166,15 @@ const createFiberAdapterWithFallback = (
     | FiberAdapterSnapshotDiagnostics
     | undefined;
   let lastFallbackMetricSignature: string | undefined;
-  const fiberAdapter = createFiberReactInspectorAdapter({
-    onSnapshotDiagnostics: (diagnostics) => {
-      latestFiberSnapshotDiagnostics = diagnostics;
-    },
-  });
-  let activeAdapter: ReactInspectorAdapterContract = fiberAdapter;
-  let pendingSnapshot: ReactTreeSnapshot | undefined;
+  const fiberAdapter = toInspectorTreeAdapter(
+    createFiberReactInspectorAdapter({
+      onSnapshotDiagnostics: (diagnostics) => {
+        latestFiberSnapshotDiagnostics = diagnostics;
+      },
+    }),
+  );
+  let activeAdapter: InspectorAdapterContract = fiberAdapter;
+  let pendingSnapshot: InspectorTreeSnapshot | undefined;
 
   const emitFiberFallbackMetric = (
     reasonCode: EmbeddedBridgeFiberFallbackReasonCode,
@@ -212,9 +221,9 @@ const createFiberAdapterWithFallback = (
     return activeAdapter;
   };
 
-  return {
+  return toReactTreeAdapter({
     getTreeSnapshot: () => {
-      const activeAdapter = resolveAdapter();
+      const resolvedAdapter = resolveAdapter();
 
       if (pendingSnapshot !== undefined) {
         const nextSnapshot = pendingSnapshot;
@@ -223,7 +232,7 @@ const createFiberAdapterWithFallback = (
         return nextSnapshot;
       }
 
-      return activeAdapter.getTreeSnapshot();
+      return resolvedAdapter.getTreeSnapshot();
     },
     getNodeProps: (nodeId: string) => {
       return activeAdapter.getNodeProps(nodeId);
@@ -231,21 +240,21 @@ const createFiberAdapterWithFallback = (
     getDomElement: (nodeId: string) => {
       return activeAdapter.getDomElement(nodeId);
     },
-    getReactComponentPathForElement: (element: Element) => {
-      return fiberAdapter.getReactComponentPathForElement?.(element);
+    getComponentPathForElement: (element: Element) => {
+      return fiberAdapter.getComponentPathForElement?.(element);
     },
-  };
+  });
 };
 
 export const createReactInspectorAdapter = (
   runtimeConfig?: ReactInspectorRuntimeConfig,
   options?: CreateReactInspectorAdapterOptions,
-) => {
+): ReactInspectorAdapterContract => {
   const resolvedRuntimeConfig =
     resolveReactInspectorRuntimeConfig(runtimeConfig);
 
   if (resolvedRuntimeConfig.adapter === 'auto') {
-    return createNoopAdapter();
+    return toReactTreeAdapter(createNoopAdapter());
   }
 
   if (resolvedRuntimeConfig.adapter === 'vite') {
@@ -264,5 +273,5 @@ export const createReactInspectorAdapter = (
     return createFiberAdapterWithFallback(options);
   }
 
-  return createNoopAdapter();
+  return toReactTreeAdapter(createNoopAdapter());
 };

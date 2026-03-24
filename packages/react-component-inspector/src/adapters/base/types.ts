@@ -1,4 +1,4 @@
-import type { ReactTreeSnapshot } from './baseAdapter';
+import type { InspectorTreeSnapshot, ReactTreeSnapshot } from './baseAdapter';
 
 export const reactInspectorRuntimeAdapterTargets = [
   'auto',
@@ -11,13 +11,26 @@ export const reactInspectorRuntimeAdapterTargets = [
 export type ReactInspectorRuntimeAdapterTarget =
   (typeof reactInspectorRuntimeAdapterTargets)[number];
 
-export type ReactInspectorAdapterCapabilities = Readonly<{
+export type InspectorAdapterCapabilities = Readonly<{
   tree: boolean;
   props: boolean;
   highlight: boolean;
 }>;
 
-export type ReactInspectorComponentPath = ReadonlyArray<string>;
+export type ReactInspectorAdapterCapabilities = InspectorAdapterCapabilities;
+
+export type InspectorComponentPath = ReadonlyArray<string>;
+
+export type ReactInspectorComponentPath = InspectorComponentPath;
+
+export type InspectorAdapterContract = {
+  getTreeSnapshot: () => InspectorTreeSnapshot;
+  getNodeProps: (nodeId: string) => unknown | undefined;
+  getDomElement: (nodeId: string) => Element | null;
+  getComponentPathForElement?: (
+    element: Element,
+  ) => InspectorComponentPath | undefined;
+};
 
 export type ReactInspectorAdapterContract = {
   getTreeSnapshot: () => ReactTreeSnapshot;
@@ -30,10 +43,10 @@ export type ReactInspectorAdapterContract = {
 
 export type ReactInspectorRuntimeConfig = {
   adapter?: ReactInspectorRuntimeAdapterTarget;
-  capabilities?: Partial<ReactInspectorAdapterCapabilities>;
+  capabilities?: Partial<InspectorAdapterCapabilities>;
 };
 
 export type ResolvedReactInspectorRuntimeConfig = {
   adapter: ReactInspectorRuntimeAdapterTarget;
-  capabilities: ReactInspectorAdapterCapabilities;
+  capabilities: InspectorAdapterCapabilities;
 };

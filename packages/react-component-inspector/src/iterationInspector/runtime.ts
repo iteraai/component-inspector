@@ -66,7 +66,10 @@ declare global {
   interface Window {
     __ITERA_ITERATION_INSPECTOR_RUNTIME__?: IterationInspectorRuntime;
     __ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__?: {
-      getReactComponentPathForElement: (
+      getComponentPathForElement?: (
+        element: Element,
+      ) => ReadonlyArray<string> | undefined;
+      getReactComponentPathForElement?: (
         element: Element,
       ) => ReadonlyArray<string> | undefined;
     };
@@ -764,12 +767,12 @@ const buildInspectableTargetSelection = (
   };
 };
 
-const resolveReactComponentPath = (element: Element, win: Window) => {
+const resolveComponentPath = (element: Element, win: Window) => {
   try {
+    const selectionApi = win.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
     const reactComponentPath =
-      win.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__?.getReactComponentPathForElement(
-        element,
-      );
+      selectionApi?.getComponentPathForElement?.(element) ??
+      selectionApi?.getReactComponentPathForElement?.(element);
 
     if (reactComponentPath === undefined) {
       return undefined;
@@ -794,7 +797,7 @@ export const buildIterationElementSelection = (
   const role = inferRole(element);
   const accessibleName = getAccessibleName(element, doc);
   const textPreview = getNodeText(element);
-  const reactComponentPath = resolveReactComponentPath(element, win);
+  const reactComponentPath = resolveComponentPath(element, win);
 
   return {
     displayText: buildIterationElementDisplayText(element, doc, {

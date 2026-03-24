@@ -1,5 +1,6 @@
-import { createBaseReactInspectorAdapter } from '../base/baseAdapter';
+import { createBaseInspectorAdapter } from '../base/baseAdapter';
 import type { ReactInspectorAdapterContract } from '../base/types';
+import { toReactTreeAdapter } from '../../inspectorTreeAdapter';
 import { resolveFiberHighlightTarget } from './highlightTarget';
 import { createFiberNodeIdentityAllocator } from './nodeIdentity';
 import { createFiberNodeLookup } from './nodeLookup';
@@ -76,43 +77,45 @@ export const createFiberReactInspectorAdapter = (
     }
   };
 
-  return createBaseReactInspectorAdapter({
-    getTreeSnapshot: () => {
-      return refreshSnapshotState();
-    },
-    getNodeProps: ({ node }) => {
-      const lookupPayload = resolveLookupPayload(node.id);
+  return toReactTreeAdapter(
+    createBaseInspectorAdapter({
+      getTreeSnapshot: () => {
+        return refreshSnapshotState();
+      },
+      getNodeProps: ({ node }) => {
+        const lookupPayload = resolveLookupPayload(node.id);
 
-      if (lookupPayload === undefined) {
-        return undefined;
-      }
+        if (lookupPayload === undefined) {
+          return undefined;
+        }
 
-      try {
-        return readFiberNodeProps(lookupPayload);
-      } catch {
-        return undefined;
-      }
-    },
-    getDomElement: ({ node }) => {
-      const lookupPayload = resolveLookupPayload(node.id);
+        try {
+          return readFiberNodeProps(lookupPayload);
+        } catch {
+          return undefined;
+        }
+      },
+      getDomElement: ({ node }) => {
+        const lookupPayload = resolveLookupPayload(node.id);
 
-      if (lookupPayload === undefined) {
-        return null;
-      }
+        if (lookupPayload === undefined) {
+          return null;
+        }
 
-      try {
-        return resolveFiberHighlightTarget(lookupPayload);
-      } catch {
-        return null;
-      }
-    },
-    getReactComponentPathForElement: (element) => {
-      try {
-        refreshSnapshotState();
-        return nodeLookup.resolveClosestComponentPathForElement(element);
-      } catch {
-        return undefined;
-      }
-    },
-  });
+        try {
+          return resolveFiberHighlightTarget(lookupPayload);
+        } catch {
+          return null;
+        }
+      },
+      getComponentPathForElement: (element) => {
+        try {
+          refreshSnapshotState();
+          return nodeLookup.resolveClosestComponentPathForElement(element);
+        } catch {
+          return undefined;
+        }
+      },
+    }),
+  );
 };

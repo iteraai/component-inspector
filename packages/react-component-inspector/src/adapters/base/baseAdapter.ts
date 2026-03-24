@@ -1,15 +1,23 @@
 import type { TreeNode, TreeSnapshotMeta } from '@iteraai/inspector-protocol';
-import type { ReactInspectorAdapterContract } from './types';
+import type {
+  InspectorAdapterContract,
+  InspectorComponentPath,
+  ReactInspectorAdapterContract,
+} from './types';
 
-export type ReactTreeSnapshot = {
+export type InspectorTreeSnapshot = {
   nodes: TreeNode[];
   rootIds: string[];
   meta?: TreeSnapshotMeta;
 };
 
-export type CappedReactTreeSnapshot = ReactTreeSnapshot & {
+export type ReactTreeSnapshot = InspectorTreeSnapshot;
+
+export type CappedInspectorTreeSnapshot = InspectorTreeSnapshot & {
   meta?: TreeSnapshotMeta;
 };
+
+export type CappedReactTreeSnapshot = CappedInspectorTreeSnapshot;
 
 export const MAX_TREE_SNAPSHOT_NODE_COUNT = 200;
 
@@ -28,7 +36,7 @@ const toUniqueNodeById = (nodes: TreeNode[]) => {
 };
 
 const toTraversalSeedNodeIds = (
-  snapshot: ReactTreeSnapshot,
+  snapshot: InspectorTreeSnapshot,
   nodeById: Map<string, TreeNode>,
 ) => {
   const seedNodeIds: string[] = [];
@@ -66,7 +74,7 @@ const toTraversalSeedNodeIds = (
 };
 
 const toTruncatedNodes = (
-  snapshot: ReactTreeSnapshot,
+  snapshot: InspectorTreeSnapshot,
   includedNodeIdSet: Set<string>,
 ) => {
   const emittedNodeIds = new Set<string>();
@@ -94,7 +102,7 @@ const toTruncatedNodes = (
 };
 
 const toTruncatedRootIds = (
-  snapshot: ReactTreeSnapshot,
+  snapshot: InspectorTreeSnapshot,
   truncatedNodes: TreeNode[],
 ) => {
   const includedNodeById = new Map(
@@ -131,9 +139,9 @@ const toTruncatedRootIds = (
 };
 
 export const capTreeSnapshot = (
-  snapshot: ReactTreeSnapshot,
+  snapshot: InspectorTreeSnapshot,
   maxNodeCount = MAX_TREE_SNAPSHOT_NODE_COUNT,
-): CappedReactTreeSnapshot => {
+): CappedInspectorTreeSnapshot => {
   const totalNodeCount = snapshot.nodes.length;
 
   if (maxNodeCount <= 0) {
@@ -221,16 +229,18 @@ export const capTreeSnapshot = (
   };
 };
 
-export type BaseAdapterNodeLookup = {
+export type InspectorAdapterNodeLookup = {
   node: TreeNode;
   nodeById: ReadonlyMap<string, TreeNode>;
-  snapshot: ReactTreeSnapshot;
+  snapshot: InspectorTreeSnapshot;
 };
 
+export type BaseAdapterNodeLookup = InspectorAdapterNodeLookup;
+
 const resolveNodeLookup = (
-  snapshot: ReactTreeSnapshot,
+  snapshot: InspectorTreeSnapshot,
   nodeId: string,
-): BaseAdapterNodeLookup | undefined => {
+): InspectorAdapterNodeLookup | undefined => {
   const nodeById = toUniqueNodeById(snapshot.nodes);
   const node = nodeById.get(nodeId);
 
@@ -245,18 +255,27 @@ const resolveNodeLookup = (
   };
 };
 
-export type CreateBaseReactInspectorAdapterOptions = {
-  getTreeSnapshot: () => ReactTreeSnapshot;
-  getNodeProps?: (lookup: BaseAdapterNodeLookup) => unknown | undefined;
-  getDomElement?: (lookup: BaseAdapterNodeLookup) => Element | null;
-  getReactComponentPathForElement?: (
-    element: Element,
-  ) => ReadonlyArray<string> | undefined;
+type CreateBaseAdapterNodeLookupOptions = {
+  getTreeSnapshot: () => InspectorTreeSnapshot;
+  getNodeProps?: (lookup: InspectorAdapterNodeLookup) => unknown | undefined;
+  getDomElement?: (lookup: InspectorAdapterNodeLookup) => Element | null;
 };
 
-export const createBaseReactInspectorAdapter = (
-  options: CreateBaseReactInspectorAdapterOptions,
-): ReactInspectorAdapterContract => {
+export type CreateBaseInspectorAdapterOptions =
+  CreateBaseAdapterNodeLookupOptions & {
+    getComponentPathForElement?: (
+      element: Element,
+    ) => InspectorComponentPath | undefined;
+  };
+
+export type CreateBaseReactInspectorAdapterOptions =
+  CreateBaseAdapterNodeLookupOptions & {
+  getReactComponentPathForElement?: (
+    element: Element,
+  ) => InspectorComponentPath | undefined;
+};
+
+const createLookupResolvers = (options: CreateBaseAdapterNodeLookupOptions) => {
   return {
     getTreeSnapshot: () => options.getTreeSnapshot(),
     getNodeProps: (nodeId: string) => {
@@ -287,6 +306,37 @@ export const createBaseReactInspectorAdapter = (
 
       return options.getDomElement(lookup);
     },
-    getReactComponentPathForElement: options.getReactComponentPathForElement,
+  };
+};
+
+export const createBaseInspectorAdapter = (
+  options: CreateBaseInspectorAdapterOptions,
+): InspectorAdapterContract => {
+  return {
+    ...createLookupResolvers(options),
+    ...(options.getComponentPathForElement !== undefined && {
+      getComponentPathForElement: options.getComponentPathForElement,
+    }),
+  };
+};
+
+export const createBaseReactInspectorAdapter = (
+  options: CreateBaseReactInspectorAdapterOptions,
+): ReactInspectorAdapterContract => {
+  const inspectorAdapter = createBaseInspectorAdapter({
+    getTreeSnapshot: options.getTreeSnapshot,
+    getNodeProps: options.getNodeProps,
+    getDomElement: options.getDomElement,
+    getComponentPathForElement: options.getReactComponentPathForElement,
+  });
+
+  return {
+    getTreeSnapshot: inspectorAdapter.getTreeSnapshot,
+    getNodeProps: inspectorAdapter.getNodeProps,
+    getDomElement: inspectorAdapter.getDomElement,
+    ...(inspectorAdapter.getComponentPathForElement !== undefined && {
+      getReactComponentPathForElement:
+        inspectorAdapter.getComponentPathForElement,
+    }),
   };
 };

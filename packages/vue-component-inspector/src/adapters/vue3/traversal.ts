@@ -169,7 +169,7 @@ const resolveInstanceRecordKey = (
   const uid = toPositiveInteger(readObjectValue(instance, 'uid'));
 
   if (uid !== undefined) {
-    return `uid:${uid}`;
+    return `root:${rootIndex}:uid:${uid}`;
   }
 
   const existingFallbackKey = state.fallbackKeyByInstanceRef.get(instance);

@@ -56,7 +56,7 @@ const toBaseNodeId = (record: VueTraversalRecord) => {
     Number.isInteger(uidValue) &&
     uidValue >= 0
   ) {
-    return `${NODE_ID_PREFIX}-u${uidValue}`;
+    return `${NODE_ID_PREFIX}-r${record.rootIndex}-u${uidValue}`;
   }
 
   const parentHash = toStableHash(record.parentKey ?? 'root');

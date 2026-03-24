@@ -1,6 +1,7 @@
 import {
   KeepAlive,
   Suspense,
+  type App,
   createApp,
   defineComponent,
   h,
@@ -8,6 +9,8 @@ import {
   ref,
 } from 'vue';
 import { createVueInspectorAdapter } from '../base/createVueInspectorAdapter';
+import type { VueMountedAppRecord } from '../base/types';
+import { createVue3InspectorAdapter } from './vue3Adapter';
 
 const createMountedAdapter = (appDefinition: Parameters<typeof createApp>[0]) => {
   const container = document.createElement('div');
@@ -28,6 +31,49 @@ const toNodeByDisplayName = (
   snapshot: ReturnType<ReturnType<typeof createVueInspectorAdapter>['getTreeSnapshot']>,
 ) => {
   return new Map(snapshot.nodes.map((node) => [node.displayName, node]));
+};
+
+const createMockMountedAppRecord = (
+  options: {
+    rootDisplayName: string;
+    childDisplayName: string;
+    rootUid?: number;
+    childUid?: number;
+  },
+  container: Element,
+): VueMountedAppRecord => {
+  const childInstance = {
+    uid: options.childUid ?? 1,
+    type: {
+      name: options.childDisplayName,
+    },
+    vnode: {
+      key: null,
+    },
+    subTree: {
+      type: 'div',
+    },
+  };
+  const rootInstance = {
+    uid: options.rootUid ?? 0,
+    type: {
+      name: options.rootDisplayName,
+    },
+    vnode: {
+      key: null,
+    },
+    subTree: {
+      component: childInstance,
+    },
+  };
+
+  return {
+    app: {
+      _instance: rootInstance,
+    } as App,
+    container,
+    source: 'explicit',
+  };
 };
 
 afterEach(() => {
@@ -177,5 +223,53 @@ describe('vue3Adapter', () => {
     expect(resolvedNodeByName.get('AsyncChild')?.id).toBe(asyncChildNodeId);
 
     app.unmount();
+  });
+
+  test('keeps separate roots distinct when different apps reuse the same component uids', () => {
+    const firstContainer = document.createElement('div');
+    const secondContainer = document.createElement('div');
+
+    document.body.append(firstContainer, secondContainer);
+
+    const adapter = createVue3InspectorAdapter({
+      getMountedApps: () => {
+        return [
+          createMockMountedAppRecord(
+            {
+              rootDisplayName: 'FirstRoot',
+              childDisplayName: 'FirstChild',
+            },
+            firstContainer,
+          ),
+          createMockMountedAppRecord(
+            {
+              rootDisplayName: 'SecondRoot',
+              childDisplayName: 'SecondChild',
+            },
+            secondContainer,
+          ),
+        ];
+      },
+    });
+    const snapshot = adapter.getTreeSnapshot();
+    const nodeByName = new Map(snapshot.nodes.map((node) => [node.displayName, node]));
+
+    expect(snapshot.rootIds).toEqual([
+      nodeByName.get('FirstRoot')?.id,
+      nodeByName.get('SecondRoot')?.id,
+    ]);
+    expect(snapshot.nodes).toHaveLength(4);
+    expect(nodeByName.get('FirstChild')?.parentId).toBe(
+      nodeByName.get('FirstRoot')?.id,
+    );
+    expect(nodeByName.get('SecondChild')?.parentId).toBe(
+      nodeByName.get('SecondRoot')?.id,
+    );
+    expect(nodeByName.get('FirstRoot')?.id).not.toBe(
+      nodeByName.get('SecondRoot')?.id,
+    );
+    expect(nodeByName.get('FirstChild')?.id).not.toBe(
+      nodeByName.get('SecondChild')?.id,
+    );
   });
 });

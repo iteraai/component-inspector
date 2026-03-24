@@ -1516,9 +1516,23 @@ const applyPreviewOperation = (
   }
 
   if (operation.fieldId === 'assetReference') {
+    if (element instanceof HTMLImageElement) {
+      previewSession.recordAttribute(element, 'src', operation.value);
+      previewSession.recordAttribute(element, 'srcset', operation.value);
+      return null;
+    }
+
+    if (element instanceof HTMLSourceElement) {
+      if (element.hasAttribute('srcset')) {
+        previewSession.recordAttribute(element, 'srcset', operation.value);
+        return null;
+      }
+
+      previewSession.recordAttribute(element, 'src', operation.value);
+      return null;
+    }
+
     if (
-      element instanceof HTMLImageElement ||
-      element instanceof HTMLSourceElement ||
       element instanceof HTMLIFrameElement ||
       element instanceof HTMLVideoElement ||
       element instanceof HTMLAudioElement

@@ -112,7 +112,12 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
         <strong id="preview-rich-strong">Original</strong>
         <span> nested copy</span>
       </div>
-      <img id="preview-image" alt="Preview" src="/initial.png" />
+      <img
+        id="preview-image"
+        alt="Preview"
+        src="/initial.png"
+        srcset="/initial-small.png 1x, /initial-large.png 2x"
+      />
     </main>
   `;
 
@@ -241,6 +246,9 @@ const thenPreviewEditsAreApplied = (
   expect(context.imageTarget.getAttribute('src')).toBe(
     'https://example.com/preview.png',
   );
+  expect(context.imageTarget.getAttribute('srcset')).toBe(
+    'https://example.com/preview.png',
+  );
   expect(getPostedMessages(context.postMessageSpy)).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
@@ -280,6 +288,9 @@ const thenPreviewEditsAreRestored = (
   expect(context.target.style.width).toBe('');
   expect(context.target.style.backgroundColor).toBe('');
   expect(context.imageTarget.getAttribute('src')).toBe('/initial.png');
+  expect(context.imageTarget.getAttribute('srcset')).toBe(
+    '/initial-small.png 1x, /initial-large.png 2x',
+  );
   expect(getPostedMessages(context.postMessageSpy)).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

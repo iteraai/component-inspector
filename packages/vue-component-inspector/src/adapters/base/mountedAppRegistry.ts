@@ -32,9 +32,16 @@ type RegistryEntry = {
   app: VueAppWithInternals;
   container: VueMountedAppContainer | null;
   cleanupTokens: Set<symbol>;
-  originalUnmount?: VueAppWithInternals['unmount'];
-  unmountWrapper?: VueAppWithInternals['unmount'];
+  unmountCleanupToken?: symbol;
 };
+
+type SharedUnmountHookState = {
+  cleanupCallbacks: Map<symbol, () => void>;
+  originalUnmount: VueAppWithInternals['unmount'];
+  unmountWrapper: VueAppWithInternals['unmount'];
+};
+
+const sharedUnmountHookStateByApp = new WeakMap<App, SharedUnmountHookState>();
 
 const isElementContainer = (value: unknown): value is Element => {
   return typeof Element === 'function' && value instanceof Element;
@@ -198,44 +205,96 @@ export const discoverMountedVueApps = (
 export const createVueMountedAppRegistry = (): VueMountedAppRegistry => {
   const entries = new Map<App, RegistryEntry>();
 
-  const restoreUnmount = (entry: RegistryEntry) => {
-    if (
-      entry.originalUnmount !== undefined &&
-      entry.unmountWrapper !== undefined &&
-      entry.app.unmount === entry.unmountWrapper
-    ) {
-      entry.app.unmount = entry.originalUnmount;
+  const restoreSharedUnmountHook = (
+    app: VueAppWithInternals,
+    state: SharedUnmountHookState,
+  ) => {
+    if (app.unmount === state.unmountWrapper) {
+      app.unmount = state.originalUnmount;
     }
 
-    entry.originalUnmount = undefined;
-    entry.unmountWrapper = undefined;
+    sharedUnmountHookStateByApp.delete(app);
   };
 
-  const cleanupEntry = (entry: RegistryEntry) => {
-    restoreUnmount(entry);
-    entries.delete(entry.app);
-  };
-
-  const ensureUnmountCleanup = (entry: RegistryEntry) => {
-    if (entry.unmountWrapper !== undefined) {
+  const unregisterSharedUnmountCleanup = (entry: RegistryEntry) => {
+    if (entry.unmountCleanupToken === undefined) {
       return;
     }
 
-    const originalUnmount = entry.app.unmount;
+    const state = sharedUnmountHookStateByApp.get(entry.app);
+
+    if (state === undefined) {
+      entry.unmountCleanupToken = undefined;
+      return;
+    }
+
+    state.cleanupCallbacks.delete(entry.unmountCleanupToken);
+    entry.unmountCleanupToken = undefined;
+
+    if (state.cleanupCallbacks.size === 0) {
+      restoreSharedUnmountHook(entry.app, state);
+    }
+  };
+
+  const cleanupEntry = (
+    entry: RegistryEntry,
+    options: {
+      unregisterSharedUnmountCleanup?: boolean;
+    } = {},
+  ) => {
+    if (options.unregisterSharedUnmountCleanup !== false) {
+      unregisterSharedUnmountCleanup(entry);
+    } else {
+      entry.unmountCleanupToken = undefined;
+    }
+
+    entries.delete(entry.app);
+  };
+
+  const createSharedUnmountHookState = (app: VueAppWithInternals) => {
+    const state = {
+      cleanupCallbacks: new Map<symbol, () => void>(),
+      originalUnmount: app.unmount,
+      unmountWrapper: (() => undefined) as unknown as VueAppWithInternals['unmount'],
+    } satisfies SharedUnmountHookState;
 
     const unmountWrapper = () => {
       try {
-        originalUnmount.call(entry.app);
+        state.originalUnmount.call(app);
       } finally {
-        if (entries.get(entry.app) === entry) {
-          cleanupEntry(entry);
-        }
+        [...state.cleanupCallbacks.values()].forEach((cleanupCallback) => {
+          cleanupCallback();
+        });
+
+        restoreSharedUnmountHook(app, state);
       }
     };
 
-    entry.originalUnmount = originalUnmount;
-    entry.unmountWrapper = unmountWrapper;
-    entry.app.unmount = unmountWrapper;
+    state.unmountWrapper = unmountWrapper;
+    app.unmount = state.unmountWrapper;
+    sharedUnmountHookStateByApp.set(app, state);
+
+    return state;
+  };
+
+  const ensureUnmountCleanup = (entry: RegistryEntry) => {
+    if (entry.unmountCleanupToken !== undefined) {
+      return;
+    }
+
+    const state =
+      sharedUnmountHookStateByApp.get(entry.app) ??
+      createSharedUnmountHookState(entry.app);
+    const cleanupToken = Symbol('shared-vue-app-unmount-cleanup');
+
+    state.cleanupCallbacks.set(cleanupToken, () => {
+      if (entries.get(entry.app) === entry) {
+        cleanupEntry(entry, {
+          unregisterSharedUnmountCleanup: false,
+        });
+      }
+    });
+    entry.unmountCleanupToken = cleanupToken;
   };
 
   return {
@@ -326,7 +385,7 @@ export const createVueMountedAppRegistry = (): VueMountedAppRegistry => {
     },
     destroy: () => {
       entries.forEach((entry) => {
-        restoreUnmount(entry);
+        cleanupEntry(entry);
       });
 
       entries.clear();

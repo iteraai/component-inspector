@@ -3,19 +3,15 @@ import {
   buildIterationElementSelection as buildSharedIterationElementSelection,
   createIterationInspectorRuntime as createSharedIterationInspectorRuntime,
 } from '../../../react-component-inspector/src/iterationInspector/runtime';
-import {
-  ITERATION_INSPECTOR_CHANNEL as SHARED_ITERATION_INSPECTOR_CHANNEL,
-  isIterationInspectorParentMessage as isSharedIterationInspectorParentMessage,
-  isIterationInspectorRuntimeMessage as isSharedIterationInspectorRuntimeMessage,
-} from '../../../react-component-inspector/src/iterationInspector/types';
 import type {
   IterationElementSelection,
-  IterationInspectorParentMessage,
   IterationInspectorRuntime,
-  IterationInspectorRuntimeMessage,
 } from './types';
 
 export {
+  ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorParentMessage,
+  isIterationInspectorRuntimeMessage,
   type IterationElementBounds,
   type IterationElementLocator,
   type IterationElementSelection,
@@ -39,9 +35,6 @@ type BootIterationInspectorRuntimeArgs = Omit<
   'win' | 'doc'
 >;
 
-export const ITERATION_INSPECTOR_CHANNEL: typeof SHARED_ITERATION_INSPECTOR_CHANNEL =
-  SHARED_ITERATION_INSPECTOR_CHANNEL;
-
 export const buildIterationElementSelection = (
   element: Element,
   win: Window = window,
@@ -60,16 +53,4 @@ export const bootIterationInspectorRuntime = (
   args: BootIterationInspectorRuntimeArgs = {},
 ): IterationInspectorRuntime | null => {
   return bootSharedIterationInspectorRuntime(args);
-};
-
-export const isIterationInspectorParentMessage = (
-  value: unknown,
-): value is IterationInspectorParentMessage => {
-  return isSharedIterationInspectorParentMessage(value);
-};
-
-export const isIterationInspectorRuntimeMessage = (
-  value: unknown,
-): value is IterationInspectorRuntimeMessage => {
-  return isSharedIterationInspectorRuntimeMessage(value);
 };

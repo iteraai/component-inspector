@@ -42,7 +42,7 @@ test('workspace source aliases resolve the root and subpath entrypoints', () => 
   expect(indexModule).toMatchObject({
     createVueInspectorAdapter: expect.any(Function),
     initInspectorBridge: expect.any(Function),
-    registerVueAppOnMount: expect.any(Function),
+    bootstrapEmbeddedInspectorBridgeOnMount: expect.any(Function),
     bootIterationInspectorRuntime: expect.any(Function),
   });
   expect(bridgeRuntimeModule).toMatchObject({
@@ -50,6 +50,10 @@ test('workspace source aliases resolve the root and subpath entrypoints', () => 
     initInspectorBridge: expect.any(Function),
   });
   expect(embeddedBootstrapModule).toMatchObject({
+    bootstrapEmbeddedInspectorBridge: expect.any(Function),
+    bootstrapEmbeddedInspectorBridgeOnMount: expect.any(Function),
+    initDevEmbeddedInspectorBridge: expect.any(Function),
+    initDevEmbeddedInspectorBridgeOnMount: expect.any(Function),
     registerVueAppOnMount: expect.any(Function),
   });
   expect(iterationInspectorModule).toMatchObject({

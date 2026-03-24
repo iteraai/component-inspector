@@ -21,7 +21,15 @@ export {
   type InspectorBridgeRequestHandlers,
 } from './bridgeRuntime';
 export {
+  bootstrapEmbeddedInspectorBridge,
+  bootstrapEmbeddedInspectorBridgeOnMount,
+  initDevEmbeddedInspectorBridge,
+  initDevEmbeddedInspectorBridgeOnMount,
   registerVueAppOnMount,
+  type BootstrapEmbeddedInspectorBridgeOnMountOptions,
+  type BootstrapEmbeddedInspectorBridgeOptions,
+  type InitDevEmbeddedInspectorBridgeOnMountOptions,
+  type InitDevEmbeddedInspectorBridgeOptions,
   type RegisterVueAppOnMountOptions,
 } from './embeddedBootstrap';
 export {

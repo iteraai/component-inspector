@@ -1,5 +1,22 @@
 # @iteraai/vue-component-inspector
 
+## 0.1.0
+
+### Minor Changes
+
+- 8c7c020: Add the Vue inspector foundation with runtime config defaults, mounted-app registration/discovery APIs, and embedded mount bootstrap registration support.
+- 128f1b1: Add Vue tree snapshot support, including shared tree adapter utilities, Vue 3 traversal through fragments, Suspense branches, and KeepAlive caches, stable node identity, and best-effort source metadata.
+- 210558a: Add an optional `@iteraai/vue-component-inspector/vite` entrypoint that injects richer compile-time Vue source metadata for tree snapshots. When enabled, the plugin records project-relative `file`, `line`, and `column` details on `defineComponent(...)` definitions while preserving the existing runtime-only best-effort fallback path for apps that do not opt in.
+- 848bae4: Add Vue component-path resolution for iteration element selection, including direct ancestry lookup from Vue DOM markers and a safe fallback that walks known component root elements when those markers are unavailable.
+- cd72ac6: Add Vue node props inspection and DOM highlight target resolution. The Vue inspector can now resolve stable node IDs back to mounted component instances, return serialized component props, and find highlightable DOM elements for DOM-rooted, fragment-backed, and nested component trees.
+- 5ee5f0c: Add the functional Vue package surface with root exports plus `bridgeRuntime`, `embeddedBootstrap`, and `iterationInspector` entrypoints. This also adds mount-aware embedded bootstrap helpers so Vue apps can register explicitly and start the inspector bridge before `app.mount()`.
+
+### Patch Changes
+
+- 737a739: Document and freeze the Vue package's published surface. This adds the package README to the tarball, locks the root and subpath exports with public-contract coverage, and validates the built Vue artifact through the monorepo pack smoke fixture.
+- f5abf78: Expose the Vue iteration inspector preview edit contract so it matches the React package. This adds the preview edit message and status types to the Vue public surface, validates the additive runtime capability payload, and covers the shared preview patch runtime with a Vue integration test.
+- 839986e: Add a customer-style Vue example consumer smoke path that validates built-package imports, handshake, tree snapshots, node props, highlighting, snapshots, and iteration selection behavior. This also wires the Vue smoke fixture into the workspace scripts and CI checks so regressions in supported Vue 3 browser consumption fail clearly.
+
 ## 0.0.0
 
 ### Minor Changes

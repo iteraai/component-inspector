@@ -1,5 +1,12 @@
 # @iteraai/react-component-inspector
 
+## 0.3.1
+
+### Patch Changes
+
+- 814b0e1: Fix preview edit application for text targets that should preserve the selected node,
+  and expand the example harness so preview edits can be exercised against both text and image targets.
+
 ## 0.3.0
 
 ### Minor Changes

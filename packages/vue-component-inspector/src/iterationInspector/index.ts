@@ -18,9 +18,15 @@ export {
   type IterationInspectorDebugDetails,
   type IterationInspectorInvalidationReason,
   type IterationInspectorParentMessage,
+  type IterationInspectorRuntimeCapability,
   type IterationInspectorRuntime,
   type IterationInspectorRuntimeMessage,
   type IterationInspectorSelectionMode,
+  type IterationPreviewEditError,
+  type IterationPreviewEditErrorCode,
+  type IterationPreviewEditOperation,
+  type IterationPreviewEditValueType,
+  type IterationPreviewTargetEdit,
   type IterationScrollOffset,
 } from './types';
 

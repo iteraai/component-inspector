@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/vue-component-inspector",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "description": "Browser bridge and iteration runtime for Vue 3 apps embedded in the hosted Itera editor.",

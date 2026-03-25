@@ -1,5 +1,17 @@
 # @iteraai/react-component-inspector
 
+## 0.2.0
+
+### Minor Changes
+
+- 365ef0c: Extend iteration selection payloads with a new optional, framework-neutral `componentPath` field.
+  Keep backward compatibility by still emitting `reactComponentPath` from the React inspector.
+
+### Patch Changes
+
+- ef2642d: Introduce a framework-neutral internal inspector adapter/tree contract used by the React adapter and runtimes, while keeping the existing React public contract intact. This is a refactor-only change that preserves external API surface and is intended to support future multi-framework adapter integrations.
+- 5e6de95: Add iteration preview patch runtime support so hosts can sync and clear transient text, style, size, and asset overrides, and harden the inline devtools backend hook to fail soft when the backend module shape differs across environments.
+
 ## 0.1.2
 
 ### Patch Changes

@@ -14,6 +14,9 @@
       ],
       "@iteraai/react-component-inspector/iterationInspector": [
         "./src/iterationInspector/index.ts"
+      ],
+      "@iteraai/react-component-inspector/storybook": [
+        "./src/storybook/index.ts"
       ]
     },
     "types": ["vitest/globals", "node"]

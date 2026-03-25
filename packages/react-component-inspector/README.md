@@ -37,6 +37,7 @@ This package targets browser DOM runtimes. It is meant to run inside the custome
 | `@iteraai/react-component-inspector/embeddedBootstrap`  | Embedded bootstrap helpers.                                                                                          |
 | `@iteraai/react-component-inspector/bridgeRuntime`      | Low-level bridge initialization and teardown.                                                                        |
 | `@iteraai/react-component-inspector/iterationInspector` | Element-selection runtime and message types for iteration mode.                                                      |
+| `@iteraai/react-component-inspector/storybook`          | Storybook manager relay plus preview-origin/bootstrap helpers for manager-URL debugging.                             |
 
 ## Embedded Bridge Quick Start
 
@@ -65,5 +66,35 @@ Initialize the bridge and iteration runtime during client startup, not from insi
 - The standard embedded path uses the root export or `@iteraai/react-component-inspector/embeddedBootstrap`.
 - Use `@iteraai/react-component-inspector/bridgeRuntime` when you need lower-level bridge lifecycle, security, or adapter control.
 - Use `@iteraai/react-component-inspector/iterationInspector` for the separate element-selection runtime on `itera:iteration-inspector`.
+- Use `@iteraai/react-component-inspector/storybook` when a Storybook manager window needs to relay inspector traffic into the active preview iframe while the preview explicitly trusts the manager origin.
 - The exported adapter targets are `auto`, `vite`, `next`, `cra`, and `fiber`. The standard embedded bootstrap path prefers `fiber`.
+
+## Storybook Manager Relay
+
+Use the dedicated Storybook entrypoint when the debugger loads a Storybook manager URL instead of a direct `iframe.html` story URL:
+
+```ts
+import { bootIterationInspectorRuntime } from "@iteraai/react-component-inspector/iterationInspector";
+import {
+  bootstrapStorybookPreviewInspectorBridge,
+  initStorybookManagerRelay,
+} from "@iteraai/react-component-inspector/storybook";
+
+initStorybookManagerRelay({
+  hostOrigins: ["https://app.iteradev.ai"],
+});
+
+const bridge = bootstrapStorybookPreviewInspectorBridge({
+  enabled: true,
+  hostOrigins: ["https://app.iteradev.ai"],
+});
+
+bootIterationInspectorRuntime();
+
+window.addEventListener("beforeunload", () => {
+  bridge.destroy();
+});
+```
+
+`initStorybookManagerRelay(...)` assumes the Storybook 10 manager preview iframe selector `iframe#storybook-preview-iframe` by default. The preview bootstrap keeps direct `iframe.html` debugging working by combining explicit `hostOrigins` with the manager origin derived from the preview referrer, or an explicit `managerOrigin` when you need to override it.
 For detailed startup timing, exact `hostOrigins` behavior, Next.js `instrumentation-client.ts`, Vite and CRA entrypoints, secure session-token validation, telemetry, and troubleshooting, use the docs pages linked above.

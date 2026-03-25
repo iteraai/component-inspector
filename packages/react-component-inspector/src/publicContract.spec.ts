@@ -10,6 +10,7 @@ import * as bridgeRuntimeModule from './bridgeRuntime';
 import * as embeddedBootstrapModule from './embeddedBootstrap';
 import * as indexModule from './index';
 import * as iterationInspectorModule from './iterationInspector';
+import * as storybookModule from './storybook';
 
 type PackageExportTarget = {
   types: string;
@@ -22,6 +23,7 @@ type BridgeContractContext = {
   embeddedBootstrapExportKeys?: string[];
   bridgeRuntimeExportKeys?: string[];
   iterationInspectorExportKeys?: string[];
+  storybookExportKeys?: string[];
 };
 
 type GuardMatrixContext = {
@@ -112,6 +114,7 @@ const contractInventoryCollected = (
     iterationInspectorExportKeys: getRuntimeExportKeys(
       iterationInspectorModule,
     ),
+    storybookExportKeys: getRuntimeExportKeys(storybookModule),
   };
 };
 
@@ -132,6 +135,10 @@ const expectCurrentPublicEntryPoints = (context: BridgeContractContext) => {
     './iterationInspector': {
       types: './dist/iterationInspector/index.d.ts',
       import: './dist/iterationInspector.js',
+    },
+    './storybook': {
+      types: './dist/storybook/index.d.ts',
+      import: './dist/storybook.js',
     },
   });
   expect(context.rootExportKeys).toStrictEqual([
@@ -187,6 +194,12 @@ const expectCurrentPublicEntryPoints = (context: BridgeContractContext) => {
     'createIterationInspectorRuntime',
     'isIterationInspectorParentMessage',
     'isIterationInspectorRuntimeMessage',
+  ]);
+  expect(context.storybookExportKeys).toStrictEqual([
+    'DEFAULT_STORYBOOK_PREVIEW_IFRAME_SELECTOR',
+    'bootstrapStorybookPreviewInspectorBridge',
+    'initStorybookManagerRelay',
+    'resolveStorybookPreviewHostOrigins',
   ]);
   expect(ITERATION_INSPECTOR_CHANNEL).toBe('itera:iteration-inspector');
   expect(EMBEDDED_RUNTIME_TELEMETRY_CHANNEL).toBe(

@@ -28,6 +28,10 @@
     "./iterationInspector": {
       "types": "./dist/iterationInspector/index.d.ts",
       "import": "./dist/iterationInspector.js"
+    },
+    "./storybook": {
+      "types": "./dist/storybook/index.d.ts",
+      "import": "./dist/storybook.js"
     }
   },
   "repository": {

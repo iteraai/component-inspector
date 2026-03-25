@@ -42,6 +42,8 @@ const sdkPackages = [
       'dist/bridgeRuntime.d.ts',
       'dist/iterationInspector.js',
       'dist/iterationInspector/index.d.ts',
+      'dist/storybook.js',
+      'dist/storybook/index.d.ts',
       'package.json'
     ]
   },
@@ -178,6 +180,10 @@ import {
   type IterationInspectorRuntimeMessage as ReactIterationInspectorRuntimeMessage,
 } from '@iteraai/react-component-inspector/iterationInspector';
 import {
+  initStorybookManagerRelay,
+  resolveStorybookPreviewHostOrigins,
+} from '@iteraai/react-component-inspector/storybook';
+import {
   resolveVueInspectorRuntimeConfig,
 } from '@iteraai/vue-component-inspector';
 import { bootstrapEmbeddedInspectorBridgeOnMount } from '@iteraai/vue-component-inspector/embeddedBootstrap';
@@ -207,6 +213,12 @@ const runtimeMessage: ReactIterationInspectorRuntimeMessage = {
 const bootstrapFn: typeof bootstrapEmbeddedInspectorBridge =
   bootstrapEmbeddedInspectorBridge;
 const initBridgeFn: typeof initReactInspectorBridge = initReactInspectorBridge;
+const initStorybookRelayFn: typeof initStorybookManagerRelay =
+  initStorybookManagerRelay;
+const storybookPreviewOrigins = resolveStorybookPreviewHostOrigins({
+  hostOrigins: ['https://app.iteradev.ai'],
+  referrer: 'https://storybook.iteradev.ai/?path=/story/button--primary',
+});
 const vueRuntimeConfig: Parameters<typeof resolveVueInspectorRuntimeConfig>[0] = {
   adapter: 'vue3',
   mountedAppDiscovery: {
@@ -233,6 +245,8 @@ void treeNode;
 void runtimeMessage;
 void bootstrapFn;
 void initBridgeFn;
+void initStorybookRelayFn;
+void storybookPreviewOrigins;
 void vueRuntimeMessage;
 void vueBootstrapFn;
 void initVueBridgeFn;
@@ -267,6 +281,10 @@ import {
   ITERATION_INSPECTOR_CHANNEL,
   isIterationInspectorRuntimeMessage,
 } from '@iteraai/react-component-inspector/iterationInspector';
+import {
+  initStorybookManagerRelay,
+  resolveStorybookPreviewHostOrigins,
+} from '@iteraai/react-component-inspector/storybook';
 import {
   defaultVueInspectorRuntimeConfig,
   defaultVueMountedAppDiscovery,
@@ -332,6 +350,14 @@ assert.deepEqual(
 );
 assert.equal(typeof bootstrapEmbeddedInspectorBridge, 'function');
 assert.equal(typeof initReactInspectorBridge, 'function');
+assert.equal(typeof initStorybookManagerRelay, 'function');
+assert.deepEqual(
+  resolveStorybookPreviewHostOrigins({
+    hostOrigins: ['https://app.iteradev.ai'],
+    referrer: 'https://storybook.iteradev.ai/?path=/story/button--primary',
+  }),
+  ['https://app.iteradev.ai', 'https://storybook.iteradev.ai'],
+);
 assert.equal(
   isIterationInspectorRuntimeMessage({
     channel: ITERATION_INSPECTOR_CHANNEL,

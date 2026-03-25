@@ -1,5 +1,11 @@
 # @iteraai/react-component-inspector
 
+## 0.3.0
+
+### Minor Changes
+
+- 497bc56: Add Storybook manager relay and preview bootstrap foundations to support component inspector integration via the new `@iteraai/react-component-inspector/storybook` entrypoint. The new flow enables manager-side message forwarding and origin-trusted preview initialization for Storybook-based workflows.
+
 ## 0.2.0
 
 ### Minor Changes

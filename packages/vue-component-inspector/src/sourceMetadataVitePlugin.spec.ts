@@ -42,6 +42,54 @@ describe('sourceMetadataVitePlugin', () => {
     expect(transformedCode).toMatch(/"column":\d+\},/);
   });
 
+  test('ignores defineComponent-like text inside strings and comments', () => {
+    const sourceModule = [
+      "import { defineComponent } from 'vue';",
+      '',
+      '// defineComponent({ should not be instrumented })',
+      'const label = "defineComponent({ still not code })";',
+      'export const ExampleCard = defineComponent({',
+      "  name: 'ExampleCard',",
+      '});',
+    ].join('\n');
+    const transformedCode = transformVueInspectorSourceMetadataModule(
+      sourceModule,
+      '/workspace/src/ExampleCard.ts',
+      '/workspace',
+    );
+
+    expect(transformedCode).toContain(
+      'const label = "defineComponent({ still not code })";',
+    );
+    expect(transformedCode).toContain(
+      'defineComponent({__source:{"file":"src/ExampleCard.ts","line":5,',
+    );
+    expect(transformedCode?.match(/__source:/g)).toHaveLength(1);
+  });
+
+  test('supports generic defineComponent invocations', () => {
+    const transformedCode = transformVueInspectorSourceMetadataModule(
+      [
+        "import { defineComponent } from 'vue';",
+        '',
+        'type Props = {',
+        '  label: string;',
+        '};',
+        '',
+        'export const ExampleCard = defineComponent<Props>({',
+        "  name: 'ExampleCard',",
+        '});',
+      ].join('\n'),
+      '/workspace/src/ExampleCard.ts',
+      '/workspace',
+    );
+
+    expect(transformedCode).toContain(
+      'defineComponent<Props>({__source:{"file":"src/ExampleCard.ts","line":7,',
+    );
+    expect(transformedCode).toMatch(/"column":\d+\},/);
+  });
+
   test('leaves files without a Vue defineComponent import unchanged', () => {
     const transformedCode = transformVueInspectorSourceMetadataModule(
       [

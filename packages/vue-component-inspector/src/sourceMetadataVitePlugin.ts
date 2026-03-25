@@ -67,8 +67,17 @@ const toSerializableSourceFile = (id: string, root: string) => {
 
 const collectDefineComponentLocalNames = (code: string) => {
   const localNames = new Set<string>();
+  const skippedRanges = collectSkippedRanges(code);
 
   for (const importMatch of code.matchAll(DEFINE_COMPONENT_IMPORT_PATTERN)) {
+    if (importMatch.index === undefined) {
+      continue;
+    }
+
+    if (isIndexWithinSkippedRange(skippedRanges, importMatch.index)) {
+      continue;
+    }
+
     const namedImports = importMatch[1];
 
     for (const specifierMatch of namedImports.matchAll(
@@ -79,6 +88,76 @@ const collectDefineComponentLocalNames = (code: string) => {
   }
 
   return [...localNames];
+};
+
+type SkippedRange = {
+  start: number;
+  end: number;
+};
+
+const collectSkippedRanges = (code: string): SkippedRange[] => {
+  const skippedRanges: SkippedRange[] = [];
+  let currentIndex = 0;
+
+  while (currentIndex < code.length) {
+    const character = code[currentIndex];
+    const nextCharacter = code[currentIndex + 1];
+
+    if (character === "'" || character === '"') {
+      const rangeEnd = skipQuotedString(code, currentIndex, character);
+
+      skippedRanges.push({
+        start: currentIndex,
+        end: rangeEnd,
+      });
+      currentIndex = rangeEnd;
+      continue;
+    }
+
+    if (character === '`') {
+      const rangeEnd = skipTemplateLiteral(code, currentIndex);
+
+      skippedRanges.push({
+        start: currentIndex,
+        end: rangeEnd,
+      });
+      currentIndex = rangeEnd;
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '/') {
+      const rangeEnd = skipLineComment(code, currentIndex);
+
+      skippedRanges.push({
+        start: currentIndex,
+        end: rangeEnd,
+      });
+      currentIndex = rangeEnd;
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      const rangeEnd = skipBlockComment(code, currentIndex);
+
+      skippedRanges.push({
+        start: currentIndex,
+        end: rangeEnd,
+      });
+      currentIndex = rangeEnd;
+      continue;
+    }
+
+    currentIndex += 1;
+  }
+
+  return skippedRanges;
+};
+
+const isIndexWithinSkippedRange = (
+  skippedRanges: readonly SkippedRange[],
+  index: number,
+) => {
+  return skippedRanges.some((range) => index >= range.start && index < range.end);
 };
 
 const skipLineComment = (code: string, index: number) => {
@@ -240,6 +319,66 @@ const skipWhitespaceAndComments = (code: string, index: number) => {
   return currentIndex;
 };
 
+const skipTypeArguments = (code: string, index: number) => {
+  if (code[index] !== '<') {
+    return index;
+  }
+
+  let depth = 1;
+  let currentIndex = index + 1;
+
+  while (currentIndex < code.length) {
+    const character = code[currentIndex];
+    const nextCharacter = code[currentIndex + 1];
+
+    if (character === "'" || character === '"') {
+      currentIndex = skipQuotedString(code, currentIndex, character);
+      continue;
+    }
+
+    if (character === '`') {
+      currentIndex = skipTemplateLiteral(code, currentIndex);
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '/') {
+      currentIndex = skipLineComment(code, currentIndex);
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      currentIndex = skipBlockComment(code, currentIndex);
+      continue;
+    }
+
+    if (character === '=' && nextCharacter === '>') {
+      currentIndex += 2;
+      continue;
+    }
+
+    if (character === '<') {
+      depth += 1;
+      currentIndex += 1;
+      continue;
+    }
+
+    if (character === '>') {
+      depth -= 1;
+      currentIndex += 1;
+
+      if (depth === 0) {
+        return currentIndex;
+      }
+
+      continue;
+    }
+
+    currentIndex += 1;
+  }
+
+  return -1;
+};
+
 const hasIdentifierBoundary = (code: string, index: number, length: number) => {
   const previousCharacter = code[index - 1];
   const nextCharacter = code[index + length];
@@ -263,7 +402,13 @@ const findDefineComponentObjectStart = (
   );
 
   if (code[currentIndex] === '<') {
-    return -1;
+    currentIndex = skipTypeArguments(code, currentIndex);
+
+    if (currentIndex === -1) {
+      return -1;
+    }
+
+    currentIndex = skipWhitespaceAndComments(code, currentIndex);
   }
 
   if (code[currentIndex] !== '(') {
@@ -277,34 +422,75 @@ const findDefineComponentObjectStart = (
 
 const collectInsertionIndexes = (code: string, localNames: readonly string[]) => {
   const insertionIndexes = new Set<number>();
+  const localNamesByFirstCharacter = new Map<string, string[]>();
 
   localNames.forEach((localName) => {
-    let searchIndex = 0;
+    const firstCharacter = localName[0];
+    const existingLocalNames =
+      localNamesByFirstCharacter.get(firstCharacter) ?? [];
 
-    while (searchIndex < code.length) {
-      const matchIndex = code.indexOf(localName, searchIndex);
-
-      if (matchIndex === -1) {
-        break;
-      }
-
-      searchIndex = matchIndex + localName.length;
-
-      if (!hasIdentifierBoundary(code, matchIndex, localName.length)) {
-        continue;
-      }
-
-      const objectStart = findDefineComponentObjectStart(
-        code,
-        matchIndex,
-        localName.length,
-      );
-
-      if (objectStart !== -1) {
-        insertionIndexes.add(objectStart);
-      }
-    }
+    existingLocalNames.push(localName);
+    existingLocalNames.sort((left, right) => right.length - left.length);
+    localNamesByFirstCharacter.set(firstCharacter, existingLocalNames);
   });
+
+  let currentIndex = 0;
+
+  while (currentIndex < code.length) {
+    const character = code[currentIndex];
+    const nextCharacter = code[currentIndex + 1];
+
+    if (character === "'" || character === '"') {
+      currentIndex = skipQuotedString(code, currentIndex, character);
+      continue;
+    }
+
+    if (character === '`') {
+      currentIndex = skipTemplateLiteral(code, currentIndex);
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '/') {
+      currentIndex = skipLineComment(code, currentIndex);
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      currentIndex = skipBlockComment(code, currentIndex);
+      continue;
+    }
+
+    const candidateLocalNames = localNamesByFirstCharacter.get(character);
+
+    if (candidateLocalNames === undefined) {
+      currentIndex += 1;
+      continue;
+    }
+
+    const matchingLocalName = candidateLocalNames.find((localName) => {
+      return (
+        code.startsWith(localName, currentIndex) &&
+        hasIdentifierBoundary(code, currentIndex, localName.length)
+      );
+    });
+
+    if (matchingLocalName === undefined) {
+      currentIndex += 1;
+      continue;
+    }
+
+    const objectStart = findDefineComponentObjectStart(
+      code,
+      currentIndex,
+      matchingLocalName.length,
+    );
+
+    if (objectStart !== -1) {
+      insertionIndexes.add(objectStart);
+    }
+
+    currentIndex += matchingLocalName.length;
+  }
 
   return [...insertionIndexes].sort((left, right) => left - right);
 };

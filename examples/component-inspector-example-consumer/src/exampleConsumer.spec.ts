@@ -33,6 +33,7 @@ const getSelectedElementMessage = (spy: ReturnType<typeof vi.spyOn>) => {
     selection: IterationElementSelection;
   }).selection;
 };
+
 const mountHarness = async (
   props: Parameters<typeof renderEmbeddedHarnessApp>[1] = {},
 ) => {
@@ -319,7 +320,9 @@ test('applies and clears preview edits for the selected fixture element', async 
     expect(publishButton!.textContent).toBe('Ship faster');
     expect(publishButton!.style.borderRadius).toBe('24px');
     expect(publishButton!.style.backgroundColor).toBe('rgb(17, 34, 51)');
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,
@@ -342,7 +345,9 @@ test('applies and clears preview edits for the selected fixture element', async 
     expect(publishButton!.textContent).toBe('Publish iteration');
     expect(publishButton!.style.borderRadius).toBe('');
     expect(publishButton!.style.backgroundColor).toBe('');
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,
@@ -413,7 +418,9 @@ test('applies and clears asset preview edits for the fixture image', async () =>
     expect(image!.getAttribute('src')).toBe(
       'https://example.com/preview-replacement.png',
     );
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,
@@ -434,7 +441,9 @@ test('applies and clears asset preview edits for the fixture image', async () =>
     );
 
     expect(image!.getAttribute('src')).toContain('images.unsplash.com');
-    expect(getPostedRuntimeMessages(postMessageSpy)).toEqual(
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel: ITERATION_INSPECTOR_CHANNEL,

@@ -26,14 +26,6 @@ type PreviewPathUpdatedMessage = {
   path: string;
 };
 
-type ExampleIterationRuntimeMessage = {
-  channel: typeof exampleIterationInspectorChannel;
-  kind: string;
-  selection?: {
-    displayText?: string;
-  };
-};
-
 export const buildHelloMessage = (requestId: string) =>
   buildMessage(
     'HELLO',
@@ -124,16 +116,8 @@ export const isPreviewPathUpdatedMessage = (
 
 export const isExampleIterationRuntimeMessage = (
   value: unknown,
-): value is ExampleIterationRuntimeMessage => {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'channel' in value &&
-    'kind' in value &&
-    value.channel === exampleIterationInspectorChannel &&
-    typeof value.kind === 'string'
-  );
-};
+): value is IterationInspectorRuntimeMessage =>
+  isIterationInspectorRuntimeMessage(value);
 
 export const isPreviewEditsStatusMessage = (
   value: unknown,
@@ -141,7 +125,10 @@ export const isPreviewEditsStatusMessage = (
   IterationInspectorRuntimeMessage,
   { kind: 'preview_edits_status' }
 > => {
-  return isIterationInspectorRuntimeMessage(value) && value.kind === 'preview_edits_status';
+  return (
+    isIterationInspectorRuntimeMessage(value) &&
+    value.kind === 'preview_edits_status'
+  );
 };
 
 export const prettyJson = (value: unknown) => {

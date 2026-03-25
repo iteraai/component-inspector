@@ -10,6 +10,7 @@ const entryPoints = {
     __dirname,
     'src/iterationInspector/index.ts',
   ),
+  storybook: path.resolve(__dirname, 'src/storybook/index.ts'),
 };
 
 const protocolSourcePath = path.resolve(

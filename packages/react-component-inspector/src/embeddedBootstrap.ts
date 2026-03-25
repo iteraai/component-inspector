@@ -7,6 +7,7 @@ import {
   type InitInspectorBridgeOptions,
 } from './bridgeRuntime';
 import { installDevtoolsInlineBackendHook } from './devtoolsInlineBackendHook';
+import { resolveConfiguredHostOrigins } from './hostOrigins';
 
 type WindowWithDevtoolsInlineMenuHook = Window & {
   __REACT_DEVTOOLS_GLOBAL_HOOK__?: {
@@ -48,34 +49,6 @@ const DEFAULT_DEV_INLINE_BACKEND_HOOK_INITIALIZED_FLAG_KEY =
   '__iteraDevtoolsInlineBackendHookInitialized';
 const DEFAULT_DEV_INLINE_MENU_READY_HANDLER_REGISTERED_FLAG_KEY =
   '__iteraRegisteredInlineMenuReadyHandler';
-
-const toResolvedHostOrigins = (
-  hostOrigins: BootstrapEmbeddedInspectorBridgeOptions['hostOrigins'],
-  defaultHostOrigins: readonly string[],
-) => {
-  if (Array.isArray(hostOrigins)) {
-    const resolvedHostOrigins = hostOrigins
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0);
-
-    return resolvedHostOrigins.length > 0
-      ? resolvedHostOrigins
-      : [...defaultHostOrigins];
-  }
-
-  if (typeof hostOrigins === 'string' && hostOrigins.length > 0) {
-    const resolvedHostOrigins = hostOrigins
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0);
-
-    return resolvedHostOrigins.length > 0
-      ? resolvedHostOrigins
-      : [...defaultHostOrigins];
-  }
-
-  return [...defaultHostOrigins];
-};
 
 const registerInlineMenuReadyNoopHandler = (flagKey: string) => {
   if (typeof window === 'undefined') {
@@ -124,7 +97,7 @@ export const bootstrapEmbeddedInspectorBridge = (
     );
   }
 
-  const resolvedHostOrigins = toResolvedHostOrigins(
+  const resolvedHostOrigins = resolveConfiguredHostOrigins(
     options.hostOrigins,
     options.defaultHostOrigins ?? [],
   );

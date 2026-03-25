@@ -87,6 +87,10 @@ pre {
   color: #505c70;
 }
 
+.example-copy-compact {
+  margin-top: 0;
+}
+
 .example-field {
   display: grid;
   gap: 8px;
@@ -134,6 +138,15 @@ pre {
 
 .example-card--panel {
   padding: 22px;
+}
+
+.example-media-image {
+  display: block;
+  width: 100%;
+  border-radius: 20px;
+  object-fit: cover;
+  aspect-ratio: 16 / 10;
+  box-shadow: 0 20px 45px rgba(29, 36, 50, 0.12);
 }
 
 .example-chip-row {
@@ -215,6 +228,36 @@ pre {
 .example-log-list {
   display: grid;
   gap: 12px;
+}
+
+.example-edit-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.example-edit-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(29, 36, 50, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.54);
+  padding: 16px;
+}
+
+.example-edit-section-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.example-edit-status {
+  margin: 0;
+  color: #435064;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.example-button--secondary {
+  background: linear-gradient(135deg, #6a7482 0%, #9ca5b1 100%);
 }
 
 .example-log-entry {

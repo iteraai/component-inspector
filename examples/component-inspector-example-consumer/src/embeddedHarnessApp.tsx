@@ -81,6 +81,23 @@ export const EmbeddedHarnessApp = ({
           >
             Publish iteration
           </button>
+
+          <section
+            data-inspector-node-id='media-panel'
+            className='example-card example-card--panel'
+          >
+            <p className='example-section-label'>Media fixture</p>
+            <p className='example-copy example-copy-compact'>
+              Use this image to validate asset swaps and image-target selection.
+            </p>
+            <img
+              data-inspector-node-id='preview-image'
+              data-testid='preview-image'
+              className='example-media-image'
+              alt='Modern workspace with a bright monitor and sketchbook'
+              src='https://images.unsplash.com/photo-1496171367470-9ed9a91ea931?auto=format&fit=crop&w=1200&q=80'
+            />
+          </section>
         </main>
       </div>
     </div>

@@ -1,9 +1,15 @@
 import { buildMessage } from '@iteraai/inspector-protocol';
+import {
+  ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorRuntimeMessage,
+  type IterationInspectorRuntimeMessage,
+  type IterationPreviewTargetEdit,
+} from '@iteraai/react-component-inspector/iterationInspector';
 
 export const exampleHostOrigin = 'http://127.0.0.1:4173';
 export const exampleEmbeddedOrigin = 'http://127.0.0.1:4174';
 export const exampleSessionId = 'component-inspector-example-session';
-export const exampleIterationInspectorChannel = 'itera:iteration-inspector';
+export const exampleIterationInspectorChannel = ITERATION_INSPECTOR_CHANNEL;
 export const publishButtonDisplayName = 'PublishButton';
 
 const defaultEmbeddedHostOrigins = encodeURIComponent(
@@ -81,6 +87,26 @@ export const buildClearHoverMessage = () => {
   } as const;
 };
 
+export const buildSyncPreviewEditsMessage = (
+  revision: number,
+  targets: ReadonlyArray<IterationPreviewTargetEdit>,
+) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'sync_preview_edits',
+    revision,
+    targets,
+  } as const;
+};
+
+export const buildClearPreviewEditsMessage = (revision: number) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'clear_preview_edits',
+    revision,
+  } as const;
+};
+
 export const isPreviewPathUpdatedMessage = (
   value: unknown,
 ): value is PreviewPathUpdatedMessage => {
@@ -107,6 +133,15 @@ export const isExampleIterationRuntimeMessage = (
     value.channel === exampleIterationInspectorChannel &&
     typeof value.kind === 'string'
   );
+};
+
+export const isPreviewEditsStatusMessage = (
+  value: unknown,
+): value is Extract<
+  IterationInspectorRuntimeMessage,
+  { kind: 'preview_edits_status' }
+> => {
+  return isIterationInspectorRuntimeMessage(value) && value.kind === 'preview_edits_status';
 };
 
 export const prettyJson = (value: unknown) => {

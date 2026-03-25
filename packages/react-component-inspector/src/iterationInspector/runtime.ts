@@ -77,7 +77,11 @@ type PreviewPatchRegistrar = {
     propertyName: string,
     value: string | null,
   ) => void;
-  recordTextContent: (element: Element, value: string) => void;
+  recordTextContent: (
+    element: Element,
+    value: string,
+    locator: IterationElementLocator,
+  ) => void;
 };
 
 type PreviewPatchSession = PreviewPatchRegistrar & {
@@ -1415,13 +1419,49 @@ const normalizePreviewStyleValue = (fieldId: string, value: string) => {
   return trimmedValue;
 };
 
+const findPreviewTextNode = (
+  element: Element,
+  locator: IterationElementLocator,
+) => {
+  const expectedText = normalizeWhitespace(
+    locator.textPreview ?? locator.accessibleName,
+  );
+
+  if (expectedText === null) {
+    return null;
+  }
+
+  const ownerDocument = element.ownerDocument;
+
+  if (ownerDocument === null) {
+    return null;
+  }
+
+  const walker = ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let currentNode = walker.nextNode();
+
+  while (currentNode !== null) {
+    if (
+      currentNode instanceof Text &&
+      !isNodeWithinOverlayRoot(currentNode) &&
+      normalizeWhitespace(currentNode.textContent) === expectedText
+    ) {
+      return currentNode;
+    }
+
+    currentNode = walker.nextNode();
+  }
+
+  return null;
+};
+
 const createPreviewPatchSession = (): PreviewPatchSession => {
   const restorers = new Map<string, () => void>();
   let nextElementId = 0;
-  const elementIds = new WeakMap<Element, number>();
+  const elementIds = new WeakMap<Node, number>();
 
-  const getElementId = (element: Element) => {
-    const currentId = elementIds.get(element);
+  const getElementId = (node: Node) => {
+    const currentId = elementIds.get(node);
 
     if (currentId !== undefined) {
       return currentId;
@@ -1429,12 +1469,12 @@ const createPreviewPatchSession = (): PreviewPatchSession => {
 
     const nextId = nextElementId;
     nextElementId += 1;
-    elementIds.set(element, nextId);
+    elementIds.set(node, nextId);
     return nextId;
   };
 
-  const recordRestore = (element: Element, key: string, restore: () => void) => {
-    const restoreKey = `${getElementId(element)}:${key}`;
+  const recordRestore = (node: Node, key: string, restore: () => void) => {
+    const restoreKey = `${getElementId(node)}:${key}`;
 
     if (!restorers.has(restoreKey)) {
       restorers.set(restoreKey, restore);
@@ -1479,7 +1519,18 @@ const createPreviewPatchSession = (): PreviewPatchSession => {
 
       element.style.setProperty(propertyName, value);
     },
-    recordTextContent: (element, value) => {
+    recordTextContent: (element, value, locator) => {
+      const matchingTextNode = findPreviewTextNode(element, locator);
+
+      if (matchingTextNode !== null) {
+        const previousValue = matchingTextNode.textContent ?? '';
+        recordRestore(matchingTextNode, 'textContent', () => {
+          matchingTextNode.textContent = previousValue;
+        });
+        matchingTextNode.textContent = value;
+        return;
+      }
+
       const previousChildNodes = Array.from(element.childNodes);
       recordRestore(element, 'textContent', () => {
         element.replaceChildren(...previousChildNodes);
@@ -1498,6 +1549,7 @@ const createPreviewPatchSession = (): PreviewPatchSession => {
 
 const applyPreviewOperation = (
   element: Element,
+  locator: IterationElementLocator,
   operation: IterationPreviewTargetEdit['operations'][number],
   previewSession: PreviewPatchRegistrar,
 ) => {
@@ -1511,7 +1563,7 @@ const applyPreviewOperation = (
   }
 
   if (operation.fieldId === 'textContent') {
-    previewSession.recordTextContent(element, operation.value);
+    previewSession.recordTextContent(element, operation.value, locator);
     return null;
   }
 
@@ -1819,6 +1871,7 @@ export const createIterationInspectorRuntime = ({
       for (const operation of targetEdit.operations) {
         const operationError = applyPreviewOperation(
           resolution.element,
+          targetEdit.locator,
           operation,
           nextPreviewPatchSession,
         );

@@ -23,6 +23,7 @@ type PreviewEditsContext = {
   richTargetLocator: IterationElementLocator;
   runtime: ReturnType<typeof createIterationInspectorRuntime>;
   target: HTMLDivElement;
+  targetTextNode: Text;
   targetLocator: IterationElementLocator;
   imageLocator: IterationElementLocator;
 };
@@ -124,13 +125,16 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
   const target = document.getElementById('preview-target');
   const richTarget = document.getElementById('preview-rich-target');
   const imageTarget = document.getElementById('preview-image');
+  const targetTextNode = target?.firstChild;
 
   expect(target).not.toBeNull();
   expect(richTarget).not.toBeNull();
   expect(imageTarget).not.toBeNull();
+  expect(targetTextNode).not.toBeNull();
   assert(target instanceof HTMLDivElement);
   assert(richTarget instanceof HTMLDivElement);
   assert(imageTarget instanceof HTMLImageElement);
+  assert(targetTextNode instanceof Text);
 
   vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
     top: 12,
@@ -183,6 +187,7 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
     richTargetLocator: buildIterationElementSelection(richTarget).element,
     runtime,
     target,
+    targetTextNode,
     targetLocator: buildIterationElementSelection(target).element,
   };
 };
@@ -241,6 +246,8 @@ const thenPreviewEditsAreApplied = (
   context: PreviewEditsContext,
 ): PreviewEditsContext => {
   expect(context.target.textContent).toBe('Updated copy');
+  expect(context.targetTextNode.isConnected).toBe(true);
+  expect(context.targetTextNode.textContent).toBe('Updated copy');
   expect(context.target.style.width).toBe('240px');
   expect(context.target.style.backgroundColor).toBe('rgb(255, 0, 0)');
   expect(context.imageTarget.getAttribute('src')).toBe(
@@ -285,6 +292,8 @@ const thenPreviewEditsAreRestored = (
   context: PreviewEditsContext,
 ): PreviewEditsContext => {
   expect(context.target.textContent).toBe('Original copy');
+  expect(context.targetTextNode.isConnected).toBe(true);
+  expect(context.targetTextNode.textContent).toBe('Original copy');
   expect(context.target.style.width).toBe('');
   expect(context.target.style.backgroundColor).toBe('');
   expect(context.imageTarget.getAttribute('src')).toBe('/initial.png');

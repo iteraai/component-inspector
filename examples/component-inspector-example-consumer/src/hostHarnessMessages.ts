@@ -1,9 +1,15 @@
 import { buildMessage } from '@iteraai/inspector-protocol';
+import {
+  ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorRuntimeMessage,
+  type IterationInspectorRuntimeMessage,
+  type IterationPreviewTargetEdit,
+} from '@iteraai/react-component-inspector/iterationInspector';
 
 export const exampleHostOrigin = 'http://127.0.0.1:4173';
 export const exampleEmbeddedOrigin = 'http://127.0.0.1:4174';
 export const exampleSessionId = 'component-inspector-example-session';
-export const exampleIterationInspectorChannel = 'itera:iteration-inspector';
+export const exampleIterationInspectorChannel = ITERATION_INSPECTOR_CHANNEL;
 export const publishButtonDisplayName = 'PublishButton';
 
 const defaultEmbeddedHostOrigins = encodeURIComponent(
@@ -18,14 +24,6 @@ type PreviewPathUpdatedMessage = {
   channel: 'itera-preview-path';
   type: 'PATH_UPDATED';
   path: string;
-};
-
-type ExampleIterationRuntimeMessage = {
-  channel: typeof exampleIterationInspectorChannel;
-  kind: string;
-  selection?: {
-    displayText?: string;
-  };
 };
 
 export const buildHelloMessage = (requestId: string) =>
@@ -81,6 +79,26 @@ export const buildClearHoverMessage = () => {
   } as const;
 };
 
+export const buildSyncPreviewEditsMessage = (
+  revision: number,
+  targets: ReadonlyArray<IterationPreviewTargetEdit>,
+) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'sync_preview_edits',
+    revision,
+    targets,
+  } as const;
+};
+
+export const buildClearPreviewEditsMessage = (revision: number) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'clear_preview_edits',
+    revision,
+  } as const;
+};
+
 export const isPreviewPathUpdatedMessage = (
   value: unknown,
 ): value is PreviewPathUpdatedMessage => {
@@ -98,14 +116,18 @@ export const isPreviewPathUpdatedMessage = (
 
 export const isExampleIterationRuntimeMessage = (
   value: unknown,
-): value is ExampleIterationRuntimeMessage => {
+): value is IterationInspectorRuntimeMessage =>
+  isIterationInspectorRuntimeMessage(value);
+
+export const isPreviewEditsStatusMessage = (
+  value: unknown,
+): value is Extract<
+  IterationInspectorRuntimeMessage,
+  { kind: 'preview_edits_status' }
+> => {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    'channel' in value &&
-    'kind' in value &&
-    value.channel === exampleIterationInspectorChannel &&
-    typeof value.kind === 'string'
+    isIterationInspectorRuntimeMessage(value) &&
+    value.kind === 'preview_edits_status'
   );
 };
 

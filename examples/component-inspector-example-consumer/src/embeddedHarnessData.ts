@@ -11,7 +11,7 @@ const exampleNodes: TreeNode[] = [
     id: 'root-app',
     displayName: 'ExampleEmbeddedHarness',
     parentId: null,
-    childrenIds: ['hero-card', 'checklist-panel'],
+    childrenIds: ['hero-card', 'checklist-panel', 'media-panel'],
   },
   {
     id: 'hero-card',
@@ -29,6 +29,18 @@ const exampleNodes: TreeNode[] = [
     id: 'publish-button',
     displayName: 'PublishButton',
     parentId: 'checklist-panel',
+    childrenIds: [],
+  },
+  {
+    id: 'media-panel',
+    displayName: 'MediaPanel',
+    parentId: 'root-app',
+    childrenIds: ['preview-image'],
+  },
+  {
+    id: 'preview-image',
+    displayName: 'PreviewImage',
+    parentId: 'media-panel',
     childrenIds: [],
   },
 ];
@@ -54,6 +66,15 @@ export const exampleNodePropsById: ExampleNodePropsById = {
     label: 'Publish iteration',
     variant: 'primary',
     analyticsEvent: 'example_publish_iteration',
+  },
+  'media-panel': {
+    title: 'Preview-ready media',
+    layout: 'card',
+  },
+  'preview-image': {
+    alt: 'Modern workspace with a bright monitor and sketchbook',
+    aspectRatio: '16 / 10',
+    assetReference: '/fixture-workspace.png',
   },
 };
 

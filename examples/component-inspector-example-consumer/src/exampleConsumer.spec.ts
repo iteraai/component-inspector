@@ -2,6 +2,7 @@ import { buildMessage } from '@iteraai/inspector-protocol';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   isIterationInspectorRuntimeMessage,
+  type IterationElementSelection,
 } from '@iteraai/react-component-inspector/iterationInspector';
 import { act } from 'react';
 import {
@@ -14,6 +15,24 @@ import {
   type MessageTargetDouble,
 } from './exampleConsumerTestUtils';
 import { renderEmbeddedHarnessApp } from './renderEmbeddedHarnessApp';
+
+const getSelectedElementMessage = (spy: ReturnType<typeof vi.spyOn>) => {
+  const selectedElementMessage = getPostedRuntimeMessages(
+    spy,
+    isIterationInspectorRuntimeMessage,
+  )
+    .filter((message) => {
+      return message.kind === 'element_selected';
+    })
+    .at(-1);
+
+  expect(selectedElementMessage?.kind).toBe('element_selected');
+
+  return (selectedElementMessage as {
+    kind: 'element_selected';
+    selection: IterationElementSelection;
+  }).selection;
+};
 
 const mountHarness = async (
   props: Parameters<typeof renderEmbeddedHarnessApp>[1] = {},
@@ -130,6 +149,7 @@ test('completes the host handshake and request flow against public package impor
           nodes: expect.arrayContaining([
             expect.objectContaining({ id: 'root-app' }),
             expect.objectContaining({ id: 'publish-button' }),
+            expect.objectContaining({ id: 'preview-image' }),
           ]),
         }),
         type: 'TREE_SNAPSHOT',
@@ -228,6 +248,208 @@ test('emits iteration selection messages for the embedded fixture button', async
           selection: expect.objectContaining({
             displayText: '@button "Publish iteration"',
           }),
+        }),
+      ]),
+    );
+  } finally {
+    await harness.unmount();
+    postMessageSpy.mockRestore();
+  }
+});
+
+test('applies and clears preview edits for the selected fixture element', async () => {
+  const postMessageSpy = vi
+    .spyOn(window, 'postMessage')
+    .mockImplementation(() => undefined);
+  const harness = await mountHarness({
+    allowSelfMessaging: true,
+  });
+
+  try {
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'enter_select_mode',
+      },
+      window,
+    );
+
+    const publishButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="publish-button"]',
+    );
+
+    expect(publishButton).not.toBeNull();
+
+    publishButton!.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    const selection = getSelectedElementMessage(postMessageSpy);
+
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'sync_preview_edits',
+        revision: 1,
+        targets: [
+          {
+            locator: selection.element,
+            operations: [
+              {
+                fieldId: 'textContent',
+                value: 'Ship faster',
+              },
+              {
+                fieldId: 'borderRadius',
+                value: '24px',
+              },
+              {
+                fieldId: 'backgroundColor',
+                value: '#112233',
+              },
+            ],
+          },
+        ],
+      },
+      window,
+    );
+
+    expect(publishButton!.textContent).toBe('Ship faster');
+    expect(publishButton!.style.borderRadius).toBe('24px');
+    expect(publishButton!.style.backgroundColor).toBe('rgb(17, 34, 51)');
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'preview_edits_status',
+          revision: 1,
+          appliedTargetCount: 1,
+        }),
+      ]),
+    );
+
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'clear_preview_edits',
+        revision: 2,
+      },
+      window,
+    );
+
+    expect(publishButton!.textContent).toBe('Publish iteration');
+    expect(publishButton!.style.borderRadius).toBe('');
+    expect(publishButton!.style.backgroundColor).toBe('');
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'preview_edits_status',
+          revision: 2,
+          appliedTargetCount: 0,
+        }),
+      ]),
+    );
+  } finally {
+    await harness.unmount();
+    postMessageSpy.mockRestore();
+  }
+});
+
+test('applies and clears asset preview edits for the fixture image', async () => {
+  const postMessageSpy = vi
+    .spyOn(window, 'postMessage')
+    .mockImplementation(() => undefined);
+  const harness = await mountHarness({
+    allowSelfMessaging: true,
+  });
+
+  try {
+    const image = document.querySelector<HTMLImageElement>(
+      '[data-testid="preview-image"]',
+    );
+
+    expect(image).not.toBeNull();
+
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'enter_select_mode',
+      },
+      window,
+    );
+
+    image!.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    const selection = getSelectedElementMessage(postMessageSpy);
+
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'sync_preview_edits',
+        revision: 3,
+        targets: [
+          {
+            locator: selection.element,
+            operations: [
+              {
+                fieldId: 'assetReference',
+                value: 'https://example.com/preview-replacement.png',
+              },
+            ],
+          },
+        ],
+      },
+      window,
+    );
+
+    expect(image!.getAttribute('src')).toBe(
+      'https://example.com/preview-replacement.png',
+    );
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'preview_edits_status',
+          revision: 3,
+          appliedTargetCount: 1,
+        }),
+      ]),
+    );
+
+    dispatchHostMessage(
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'clear_preview_edits',
+        revision: 4,
+      },
+      window,
+    );
+
+    expect(image!.getAttribute('src')).toContain('images.unsplash.com');
+    expect(
+      getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'preview_edits_status',
+          revision: 4,
+          appliedTargetCount: 0,
         }),
       ]),
     );

@@ -13,6 +13,9 @@
       ],
       "@iteraai/vue-component-inspector/iterationInspector": [
         "./src/iterationInspector/index.ts"
+      ],
+      "@iteraai/vue-component-inspector/vite": [
+        "./src/vite.ts"
       ]
     },
     "types": ["vitest/globals", "node"]

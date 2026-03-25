@@ -4,6 +4,7 @@ import * as bridgeRuntimeModule from '@iteraai/vue-component-inspector/bridgeRun
 import * as embeddedBootstrapModule from '@iteraai/vue-component-inspector/embeddedBootstrap';
 import * as indexModule from '@iteraai/vue-component-inspector';
 import * as iterationInspectorModule from '@iteraai/vue-component-inspector/iterationInspector';
+import * as viteModule from '@iteraai/vue-component-inspector/vite';
 
 type PackageExportTarget = {
   types: string;
@@ -39,6 +40,10 @@ test('package exports and runtime entrypoints stay stable', () => {
     './iterationInspector': {
       types: './dist/iterationInspector/index.d.ts',
       import: './dist/iterationInspector.js',
+    },
+    './vite': {
+      types: './dist/vite.d.ts',
+      import: './dist/vite.js',
     },
   });
   expect(getRuntimeExportKeys(indexModule)).toStrictEqual([
@@ -95,6 +100,9 @@ test('package exports and runtime entrypoints stay stable', () => {
     'createIterationInspectorRuntime',
     'isIterationInspectorParentMessage',
     'isIterationInspectorRuntimeMessage',
+  ]);
+  expect(getRuntimeExportKeys(viteModule)).toStrictEqual([
+    'createVueInspectorSourceMetadataVitePlugin',
   ]);
   expect(ITERATION_INSPECTOR_CHANNEL).toBe('itera:iteration-inspector');
 });

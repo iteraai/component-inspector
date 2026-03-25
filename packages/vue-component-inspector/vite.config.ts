@@ -10,6 +10,7 @@ const entryPoints = {
     __dirname,
     'src/iterationInspector/index.ts',
   ),
+  vite: path.resolve(__dirname, 'src/vite.ts'),
 };
 
 const protocolSourcePath = path.resolve(
@@ -29,6 +30,7 @@ const vuePackageIterationInspectorSourcePath = path.resolve(
   'src/iterationInspector/index.ts',
 );
 const vuePackageIndexSourcePath = path.resolve(__dirname, 'src/index.ts');
+const vuePackageViteSourcePath = path.resolve(__dirname, 'src/vite.ts');
 
 export default defineConfig({
   build: {
@@ -42,6 +44,7 @@ export default defineConfig({
     rollupOptions: {
       external: (id) => {
         return (
+          id === 'node:path' ||
           id === '@iteraai/inspector-protocol' ||
           id.startsWith('@iteraai/inspector-protocol/') ||
           id === 'vue'
@@ -77,6 +80,7 @@ export default defineConfig({
               vuePackageEmbeddedBootstrapSourcePath,
             '@iteraai/vue-component-inspector/iterationInspector':
               vuePackageIterationInspectorSourcePath,
+            '@iteraai/vue-component-inspector/vite': vuePackageViteSourcePath,
             '@iteraai/vue-component-inspector': vuePackageIndexSourcePath,
           }
         : {}),

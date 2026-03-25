@@ -28,6 +28,10 @@
     "./iterationInspector": {
       "types": "./dist/iterationInspector/index.d.ts",
       "import": "./dist/iterationInspector.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
     }
   },
   "repository": {

@@ -64,11 +64,83 @@ test('resolves Vue public package imports to built dist entrypoints', () => {
     resolveInspectorImportPath('@iteraai/vue-component-inspector/embeddedBootstrap'),
     resolveInspectorImportPath('@iteraai/vue-component-inspector/bridgeRuntime'),
     resolveInspectorImportPath('@iteraai/vue-component-inspector/iterationInspector'),
+    resolveInspectorImportPath('@iteraai/vue-component-inspector/vite'),
   ];
 
   for (const resolvedEntryPoint of resolvedEntryPoints) {
     expect(resolvedEntryPoint).toContain('/dist/');
     expect(resolvedEntryPoint).not.toContain('/src/');
+  }
+});
+
+test('surfaces richer Vue tree source metadata when the Vite plugin is enabled', async () => {
+  const hostSource: MessageTargetDouble = {
+    postMessage: vi.fn(),
+  };
+  const harness = await mountHarness();
+
+  try {
+    dispatchHostMessage(
+      buildMessage(
+        'HELLO',
+        {
+          capabilities: ['tree'],
+        },
+        {
+          requestId: 'request-hello-source',
+          sessionId: 'session-vue-source-1',
+        },
+      ),
+      hostSource as unknown as MessageEventSource,
+    );
+
+    dispatchHostMessage(
+      buildMessage(
+        'REQUEST_TREE',
+        {
+          includeSource: true,
+        },
+        {
+          requestId: 'request-tree-source',
+          sessionId: 'session-vue-source-1',
+        },
+      ),
+      hostSource as unknown as MessageEventSource,
+    );
+
+    const treeSnapshotMessage = getPostedProtocolMessage(
+      hostSource.postMessage,
+      'TREE_SNAPSHOT',
+    ) as
+      | {
+          payload?: {
+            nodes: Array<{
+              displayName: string;
+              source?: {
+                file: string;
+                line: number;
+                column?: number;
+              };
+            }>;
+          };
+        }
+      | undefined;
+
+    const publishButtonNode = treeSnapshotMessage?.payload?.nodes.find(
+      (node) => node.displayName === 'PublishButton',
+    );
+
+    expect(publishButtonNode?.source).toEqual(
+      expect.objectContaining({
+        file: 'src/renderVueEmbeddedHarnessApp.ts',
+        line: expect.any(Number),
+        column: expect.any(Number),
+      }),
+    );
+    expect(publishButtonNode?.source?.line).toBeGreaterThan(1);
+    expect(publishButtonNode?.source?.column).toBeGreaterThan(1);
+  } finally {
+    await harness.unmount();
   }
 });
 

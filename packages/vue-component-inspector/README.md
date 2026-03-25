@@ -33,6 +33,7 @@ This package targets Vue 3 browser DOM runtimes. Vue 2, SSR-only entrypoints, an
 | `@iteraai/vue-component-inspector/embeddedBootstrap`  | Embedded bootstrap helpers that can register Vue apps around `app.mount(...)`.                             |
 | `@iteraai/vue-component-inspector/bridgeRuntime`      | Low-level bridge initialization and teardown.                                                               |
 | `@iteraai/vue-component-inspector/iterationInspector` | Element-selection runtime and message types for iteration mode.                                             |
+| `@iteraai/vue-component-inspector/vite`               | Optional Vite plugin that injects richer `file`/`line`/`column` source metadata into Vue component options. |
 
 ## Embedded Bridge Quick Start
 
@@ -63,10 +64,27 @@ window.addEventListener('beforeunload', () => {
 
 Initialize the bridge during client startup, not from inside a mounted Vue component tree. For Vue, the preferred contract is explicit app registration through `bootstrapEmbeddedInspectorBridgeOnMount(...)` or `registerVueAppOnMount(...)` before or immediately around `app.mount(...)`. Mounted-app DOM discovery remains fallback behavior when explicit registration is not used.
 
+## Optional Vite Source Metadata Plugin
+
+Baseline runtime support reads best-effort Vue file metadata when it is available. If you want richer `file`, `line`, and `column` metadata in tree snapshots, add the optional Vite plugin:
+
+```ts
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { createVueInspectorSourceMetadataVitePlugin } from '@iteraai/vue-component-inspector/vite';
+
+export default defineConfig({
+  plugins: [createVueInspectorSourceMetadataVitePlugin(), vue()],
+});
+```
+
+The plugin is strictly opt-in. Apps that do not enable it continue to work with the runtime-only best-effort source metadata path.
+
 ## Package Surface Summary
 
 - The standard embedded path uses the root export or `@iteraai/vue-component-inspector/embeddedBootstrap`.
 - Use `@iteraai/vue-component-inspector/bridgeRuntime` when you need lower-level bridge lifecycle or adapter control.
 - Use `@iteraai/vue-component-inspector/iterationInspector` for the separate element-selection runtime on `itera:iteration-inspector`.
+- Use `@iteraai/vue-component-inspector/vite` when you want compile-time source metadata injection for Vite-based Vue builds.
 - The exported adapter targets are `auto` and `vue3`.
 - The current supported runtime scope is Vue 3 browser DOM apps embedded in the hosted editor flow.

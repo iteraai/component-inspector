@@ -1,9 +1,10 @@
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
+import { createVueInspectorSourceMetadataVitePlugin } from '@iteraai/vue-component-inspector/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [createVueInspectorSourceMetadataVitePlugin(), react()],
   build: {
     emptyOutDir: true,
     outDir: 'dist',

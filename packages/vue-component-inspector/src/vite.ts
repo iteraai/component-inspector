@@ -1,0 +1,1 @@
+export { createVueInspectorSourceMetadataVitePlugin } from './sourceMetadataVitePlugin';

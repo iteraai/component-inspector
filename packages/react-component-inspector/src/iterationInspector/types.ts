@@ -33,6 +33,7 @@ export type IterationElementLocator = {
 export type IterationElementSelection = {
   displayText: string;
   element: IterationElementLocator;
+  editableValues?: IterationEditableValues;
 };
 
 export type IterationInspectorInvalidationReason =
@@ -85,6 +86,30 @@ export type IterationPreviewEditError = {
   targetIndex: number;
   fieldId?: string;
 };
+
+const iterationEditableValueFieldIds = [
+  'display',
+  'flexDirection',
+  'justifyContent',
+  'alignItems',
+  'alignSelf',
+  'backgroundColor',
+  'textColor',
+  'fontSize',
+  'fontWeight',
+  'textContent',
+  'assetReference',
+  'padding',
+  'margin',
+  'borderRadius',
+] as const;
+
+export type IterationEditableValueFieldId =
+  (typeof iterationEditableValueFieldIds)[number];
+
+export type IterationEditableValues = Partial<
+  Record<IterationEditableValueFieldId, string>
+>;
 
 type IterationInspectorParentMessageDebugConfig = {
   debugEnabled?: boolean;
@@ -251,7 +276,9 @@ const isIterationElementSelection = (
 
   return (
     typeof value.displayText === 'string' &&
-    isIterationElementLocator(value.element)
+    isIterationElementLocator(value.element) &&
+    (value.editableValues === undefined ||
+      isIterationEditableValues(value.editableValues))
   );
 };
 
@@ -334,6 +361,22 @@ const isIterationPreviewEditError = (
     isNonNegativeInteger(value.targetIndex) &&
     (value.fieldId === undefined || typeof value.fieldId === 'string')
   );
+};
+
+const isIterationEditableValues = (
+  value: unknown,
+): value is IterationEditableValues => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Object.entries(value).every(([fieldId, fieldValue]) => {
+    return (
+      iterationEditableValueFieldIds.includes(
+        fieldId as IterationEditableValueFieldId,
+      ) && typeof fieldValue === 'string'
+    );
+  });
 };
 
 export const isIterationInspectorParentMessage = (

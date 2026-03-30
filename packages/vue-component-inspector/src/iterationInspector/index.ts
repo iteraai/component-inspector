@@ -13,6 +13,8 @@ export {
   isIterationInspectorParentMessage,
   isIterationInspectorRuntimeMessage,
   type IterationElementBounds,
+  type IterationEditableValueFieldId,
+  type IterationEditableValues,
   type IterationElementLocator,
   type IterationElementSelection,
   type IterationInspectorDebugDetails,

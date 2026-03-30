@@ -332,7 +332,7 @@ const thenPreviewEditsAreApplied = (
   expect(context.targetTextNode.textContent).toBe('Updated copy');
   expect(context.target.style.width).toBe('240px');
   expect(context.target.style.backgroundColor).toBe('rgb(255, 0, 0)');
-  expect(context.target.style.background).toContain('rgb(255, 0, 0)');
+  expect(context.target.style.backgroundImage).toBe('none');
   expect(context.imageTarget.getAttribute('src')).toBe(
     'https://example.com/preview.png',
   );

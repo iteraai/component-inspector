@@ -1752,9 +1752,11 @@ const applyPreviewOperation = (
   }
 
   if (operation.fieldId === 'backgroundColor') {
-    // Previewing a background color should visibly override shorthand/layered
-    // backgrounds used by the underlying app styles.
-    previewSession.recordStyle(element, 'background', normalizedStyleValue);
+    // Previewing a background color should visibly override layered backgrounds
+    // while still restoring cleanly when the preview session is cleared.
+    previewSession.recordStyle(element, 'background-image', 'none');
+    previewSession.recordStyle(element, 'background-color', normalizedStyleValue);
+    return null;
   }
 
   previewSession.recordStyle(element, stylePropertyName, normalizedStyleValue);

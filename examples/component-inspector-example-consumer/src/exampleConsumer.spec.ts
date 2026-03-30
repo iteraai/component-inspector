@@ -319,7 +319,7 @@ test('applies and clears preview edits for the selected fixture element', async 
 
     expect(publishButton!.textContent).toBe('Ship faster');
     expect(publishButton!.style.borderRadius).toBe('24px');
-    expect(publishButton!.style.backgroundColor).toBe('rgb(17, 34, 51)');
+    expect(publishButton!.style.background).toContain('rgb(17, 34, 51)');
     expect(
       getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
     ).toEqual(
@@ -344,7 +344,7 @@ test('applies and clears preview edits for the selected fixture element', async 
 
     expect(publishButton!.textContent).toBe('Publish iteration');
     expect(publishButton!.style.borderRadius).toBe('');
-    expect(publishButton!.style.backgroundColor).toBe('');
+    expect(publishButton!.style.background).toBe('');
     expect(
       getPostedRuntimeMessages(postMessageSpy, isIterationInspectorRuntimeMessage),
     ).toEqual(

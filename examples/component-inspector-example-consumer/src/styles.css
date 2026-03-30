@@ -108,6 +108,22 @@ pre {
   color: #1d2432;
 }
 
+.example-color-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.example-color-input {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(29, 36, 50, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 4px;
+}
+
 .example-button-row {
   display: flex;
   flex-wrap: wrap;
@@ -154,6 +170,10 @@ pre {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
+}
+
+.example-chip-row--compact {
+  margin-top: 0;
 }
 
 .example-chip {
@@ -235,6 +255,40 @@ pre {
   gap: 14px;
 }
 
+.example-debugger-header {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid rgba(29, 36, 50, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(37, 65, 95, 0.08) 0%,
+    rgba(255, 255, 255, 0.72) 100%
+  );
+}
+
+.example-debugger-selection {
+  margin: 0;
+  color: #1d2432;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.example-debugger-copy {
+  margin: 6px 0 0;
+  color: #5a667a;
+  font-size: 0.92rem;
+}
+
+.example-debugger-note {
+  margin: 10px 0 0;
+  color: #8f4a17;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
 .example-edit-section {
   display: grid;
   gap: 12px;
@@ -254,6 +308,41 @@ pre {
   color: #435064;
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.example-draft-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.example-draft-chip {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 36, 50, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.example-draft-chip span {
+  color: #6c7889;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.example-draft-chip strong {
+  color: #1d2432;
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.example-draft-chip--dirty {
+  border-color: rgba(169, 79, 30, 0.36);
+  background: rgba(255, 243, 233, 0.88);
 }
 
 .example-button--secondary {
@@ -281,5 +370,9 @@ pre {
 
   .example-two-column {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  }
+
+  .example-draft-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

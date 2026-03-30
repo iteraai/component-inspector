@@ -32,8 +32,13 @@ type GuardMatrixContext = {
 };
 
 const buildRuntimeSelectionMessage = (
-  locatorOverrides: Record<string, unknown> = {},
+  options: {
+    editableValues?: Record<string, string>;
+    locatorOverrides?: Record<string, unknown>;
+  } = {},
 ) => {
+  const { editableValues, locatorOverrides = {} } = options;
+
   return {
     channel: ITERATION_INSPECTOR_CHANNEL,
     kind: 'element_selected',
@@ -62,6 +67,9 @@ const buildRuntimeSelectionMessage = (
         capturedAt: '2026-03-24T10:00:00.000Z',
         ...locatorOverrides,
       },
+      ...(editableValues !== undefined && {
+        editableValues,
+      }),
     },
   };
 };
@@ -255,8 +263,14 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         active: true,
       },
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        editableValues: {
+          display: 'flex',
+          flexDirection: 'row',
+        },
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -298,20 +312,30 @@ const runtimeSelectionContractMatrixCreated = (): GuardMatrixContext => {
   return {
     messages: [
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', ''],
+        locatorOverrides: {
+          componentPath: ['AppShell', ''],
+        },
       }),
       buildRuntimeSelectionMessage({
-        reactComponentPath: [],
+        locatorOverrides: {
+          reactComponentPath: [],
+        },
       }),
     ],
   };
@@ -344,16 +368,7 @@ const expectCurrentParentGuardKinds = (context: GuardMatrixContext) => {
 };
 
 const expectCurrentRuntimeGuardKinds = (context: GuardMatrixContext) => {
-  expect(context.results).toStrictEqual([
-    true,
-    true,
-    true,
-    true,
-    true,
-    true,
-    false,
-    false,
-  ]);
+  expect(context.results).toStrictEqual([true, true, true, true, true, true, false, false]);
 };
 
 const expectRuntimeSelectionContractCompatibility = (

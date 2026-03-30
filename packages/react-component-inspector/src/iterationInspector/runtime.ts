@@ -1,6 +1,7 @@
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
+  type IterationEditableValues,
   IterationElementSelection,
   type IterationElementLocator,
   type IterationInspectorDebugDetails,
@@ -797,6 +798,7 @@ const buildInspectableTargetSelection = (
       textPreview: getInspectableTargetTextPreview(target),
       bounds: getInspectableTargetBounds(target, doc),
     },
+    editableValues: getEditableValuesForElement(target.element, win),
   };
 };
 
@@ -872,6 +874,7 @@ export const buildIterationElementSelection = (
       includeTextFallback: true,
     }),
     element: locator,
+    editableValues: getEditableValuesForElement(element, win),
   };
 };
 
@@ -1402,6 +1405,115 @@ const resolvePreviewTargetElement = (
   } as const;
 };
 
+const collapseEditableBoxValues = (values: readonly [string, string, string, string]) => {
+  const [top, right, bottom, left] = values.map((value) => value.trim());
+
+  if (top === bottom && right === left) {
+    if (top === right) {
+      return top;
+    }
+
+    return `${top} ${right}`;
+  }
+
+  if (right === left) {
+    return `${top} ${right} ${bottom}`;
+  }
+
+  return values.join(' ');
+};
+
+const readEditableBoxShorthand = (
+  style: CSSStyleDeclaration,
+  propertyName: 'padding' | 'margin' | 'borderRadius',
+) => {
+  if (propertyName === 'borderRadius') {
+    return collapseEditableBoxValues([
+      style.borderTopLeftRadius,
+      style.borderTopRightRadius,
+      style.borderBottomRightRadius,
+      style.borderBottomLeftRadius,
+    ]);
+  }
+
+  if (propertyName === 'padding') {
+    return collapseEditableBoxValues([
+      style.paddingTop,
+      style.paddingRight,
+      style.paddingBottom,
+      style.paddingLeft,
+    ]);
+  }
+
+  return collapseEditableBoxValues([
+    style.marginTop,
+    style.marginRight,
+    style.marginBottom,
+    style.marginLeft,
+  ]);
+};
+
+const readEditableAssetReference = (
+  element: Element,
+  style: CSSStyleDeclaration,
+) => {
+  if (element instanceof HTMLImageElement || element instanceof HTMLVideoElement) {
+    return normalizeWhitespace(element.currentSrc || element.src) ?? '';
+  }
+
+  if (
+    element instanceof HTMLIFrameElement ||
+    element instanceof HTMLAudioElement
+  ) {
+    return normalizeWhitespace(element.src) ?? '';
+  }
+
+  if (element instanceof HTMLSourceElement) {
+    return normalizeWhitespace(element.srcset || element.src) ?? '';
+  }
+
+  const backgroundImage = style.backgroundImage.trim();
+  const doubleQuotedMatch = /^url\("(.*)"\)$/.exec(backgroundImage);
+
+  if (doubleQuotedMatch?.[1] !== undefined) {
+    return doubleQuotedMatch[1].trim();
+  }
+
+  const singleQuotedMatch = /^url\('(.*)'\)$/.exec(backgroundImage);
+
+  if (singleQuotedMatch?.[1] !== undefined) {
+    return singleQuotedMatch[1].trim();
+  }
+
+  const bareMatch = /^url\((.*)\)$/.exec(backgroundImage);
+
+  return bareMatch?.[1]?.trim() ?? '';
+};
+
+const getEditableValuesForElement = (
+  element: Element,
+  win: Window,
+): IterationEditableValues => {
+  const style = win.getComputedStyle(element);
+
+  return {
+    display: style.display,
+    flexDirection: style.flexDirection,
+    justifyContent: style.justifyContent,
+    alignItems: style.alignItems,
+    alignSelf: style.alignSelf,
+    backgroundColor: style.backgroundColor,
+    textColor: style.color,
+    fontSize: style.fontSize,
+    fontWeight: style.fontWeight,
+    textContent: getNodeText(element) ?? '',
+    assetReference: readEditableAssetReference(element, style),
+    padding: readEditableBoxShorthand(style, 'padding'),
+    margin: readEditableBoxShorthand(style, 'margin'),
+    borderRadius: readEditableBoxShorthand(style, 'borderRadius'),
+  };
+};
+
 const normalizePreviewStyleValue = (fieldId: string, value: string) => {
   const trimmedValue = value.trim();
 
@@ -1637,6 +1749,14 @@ const applyPreviewOperation = (
       code: 'invalid_value',
       message: `Preview edits require a non-empty value for "${operation.fieldId}".`,
     } as const;
+  }
+
+  if (operation.fieldId === 'backgroundColor') {
+    // Previewing a background color should visibly override layered backgrounds
+    // while still restoring cleanly when the preview session is cleared.
+    previewSession.recordStyle(element, 'background-image', 'none');
+    previewSession.recordStyle(element, 'background-color', normalizedStyleValue);
+    return null;
   }
 
   previewSession.recordStyle(element, stylePropertyName, normalizedStyleValue);

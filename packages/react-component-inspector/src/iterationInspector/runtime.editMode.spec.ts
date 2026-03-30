@@ -2,9 +2,11 @@ import { given } from '#test/givenWhenThen';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   type IterationElementLocator,
+  type IterationEditableValues,
   type IterationInspectorRuntimeMessage,
 } from './types';
 import {
+  bootIterationInspectorRuntime,
   buildIterationElementSelection,
   createIterationInspectorRuntime,
 } from './runtime';
@@ -26,6 +28,12 @@ type PreviewEditsContext = {
   targetTextNode: Text;
   targetLocator: IterationElementLocator;
   imageLocator: IterationElementLocator;
+};
+
+type EditableValuesContext = {
+  postMessageSpy: ReturnType<typeof vi.spyOn>;
+  runtime: ReturnType<typeof createIterationInspectorRuntime>;
+  target: HTMLDivElement;
 };
 
 const getPostedMessages = (
@@ -108,11 +116,8 @@ const givenPersistentRuntime = (): RuntimeEditModeContext => {
 const givenPreviewEditsRuntime = (): PreviewEditsContext => {
   document.body.innerHTML = `
     <main>
-      <div id="preview-target" data-testid="preview-card">Original copy</div>
-      <div id="preview-rich-target" data-testid="preview-rich-card">
-        <strong id="preview-rich-strong">Original</strong>
-        <span> nested copy</span>
-      </div>
+      <div id="preview-target" data-testid="preview-card" style="background: linear-gradient(135deg, rgb(10, 20, 30), rgb(40, 50, 60));">Original copy</div>
+      <div id="preview-rich-target" data-testid="preview-rich-card"><strong id="preview-rich-strong">Original</strong><span> nested copy</span></div>
       <img
         id="preview-image"
         alt="Preview"
@@ -192,6 +197,83 @@ const givenPreviewEditsRuntime = (): PreviewEditsContext => {
   };
 };
 
+const givenEditableValuesRuntime = (
+  options: {
+    allowSelfMessaging?: boolean;
+    urlPath?: string;
+  } = {},
+): EditableValuesContext => {
+  const { allowSelfMessaging = true, urlPath = '/editor' } = options;
+
+  window.history.replaceState({}, '', urlPath);
+  document.body.innerHTML = `
+    <main>
+      <div
+        id="editable-target"
+        data-testid="editable-card"
+        style="
+          display: flex;
+          flex-direction: row;
+          justify-content: center;
+          align-items: stretch;
+          align-self: flex-end;
+          background-color: rgb(18, 52, 86);
+          color: rgb(101, 102, 103);
+          font-size: 18px;
+          font-weight: 700;
+          padding: 8px 12px;
+          margin: 4px 8px;
+          border-radius: 10px;
+          background-image: url('https://cdn.example.com/card.png');
+        "
+      >
+        Editable card
+      </div>
+    </main>
+  `;
+
+  const target = document.getElementById('editable-target');
+
+  expect(target).not.toBeNull();
+  assert(target instanceof HTMLDivElement);
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+    top: 24,
+    left: 16,
+    width: 120,
+    height: 44,
+    right: 136,
+    bottom: 68,
+    x: 16,
+    y: 24,
+    toJSON: () => ({}),
+  });
+
+  const postMessageSpy = vi
+    .spyOn(window, 'postMessage')
+    .mockImplementation(() => undefined);
+  const runtime = createIterationInspectorRuntime({
+    allowSelfMessaging,
+  });
+
+  runtime.start();
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'enter_select_mode',
+      },
+      origin: 'https://itera.example',
+      source: window,
+    }),
+  );
+
+  return {
+    postMessageSpy,
+    runtime,
+    target,
+  };
+};
+
 const whenPreviewEditsAreSynced = (
   context: PreviewEditsContext,
 ): PreviewEditsContext => {
@@ -250,6 +332,7 @@ const thenPreviewEditsAreApplied = (
   expect(context.targetTextNode.textContent).toBe('Updated copy');
   expect(context.target.style.width).toBe('240px');
   expect(context.target.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  expect(context.target.style.backgroundImage).toBe('none');
   expect(context.imageTarget.getAttribute('src')).toBe(
     'https://example.com/preview.png',
   );
@@ -295,7 +378,7 @@ const thenPreviewEditsAreRestored = (
   expect(context.targetTextNode.isConnected).toBe(true);
   expect(context.targetTextNode.textContent).toBe('Original copy');
   expect(context.target.style.width).toBe('');
-  expect(context.target.style.backgroundColor).toBe('');
+  expect(context.target.style.backgroundImage).toContain('linear-gradient');
   expect(context.imageTarget.getAttribute('src')).toBe('/initial.png');
   expect(context.imageTarget.getAttribute('srcset')).toBe(
     '/initial-small.png 1x, /initial-large.png 2x',
@@ -461,6 +544,91 @@ const thenRuntimeAdvertisesPreviewEditCapability = (
   return context;
 };
 
+const getSelectionMessages = (
+  postMessageSpy: ReturnType<typeof vi.spyOn>,
+) => {
+  return getPostedMessages(postMessageSpy).filter(
+    (
+      message,
+    ): message is Extract<
+      IterationInspectorRuntimeMessage,
+      {
+        kind: 'element_selected';
+      }
+    > => message.kind === 'element_selected',
+  );
+};
+
+const whenEditableTargetIsSelected = (
+  context: EditableValuesContext,
+): EditableValuesContext => {
+  context.target.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 24,
+      clientY: 32,
+    }),
+  );
+
+  return context;
+};
+
+const thenSelectionCarriesEditableValues = (
+  context: EditableValuesContext,
+): EditableValuesContext => {
+  const expectedEditableValues = {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgb(18, 52, 86)',
+    textColor: 'rgb(101, 102, 103)',
+    fontSize: '18px',
+    fontWeight: '700',
+    textContent: 'Editable card',
+    assetReference: 'https://cdn.example.com/card.png',
+    padding: '8px 12px',
+    margin: '4px 8px',
+    borderRadius: '',
+  } satisfies IterationEditableValues;
+
+  expect(getSelectionMessages(context.postMessageSpy).at(-1)).toEqual(
+    expect.objectContaining({
+      channel: ITERATION_INSPECTOR_CHANNEL,
+      kind: 'element_selected',
+      selection: expect.objectContaining({
+        displayText: '@div "Editable card"',
+        editableValues: expectedEditableValues,
+      }),
+    }),
+  );
+
+  return context;
+};
+
+const thenSelectionIncludesResolvedLocator = (
+  context: EditableValuesContext,
+): EditableValuesContext => {
+  expect(getSelectionMessages(context.postMessageSpy).at(-1)).toEqual(
+    expect.objectContaining({
+      selection: expect.objectContaining({
+        element: expect.objectContaining({
+          urlPath: '/editor',
+          cssSelector: 'div#editable-target',
+        }),
+      }),
+    }),
+  );
+
+  return context;
+};
+
+const thenTopLevelBootSkipsRuntimeStartup = () => {
+  expect(bootIterationInspectorRuntime()).toBeNull();
+};
+
 const whenFirstTargetIsSelected = (
   context: RuntimeEditModeContext,
 ): RuntimeEditModeContext => {
@@ -562,6 +730,14 @@ const thenPreviewRuntimeIsStopped = (
   return context;
 };
 
+const thenEditableValuesRuntimeIsStopped = (
+  context: EditableValuesContext,
+): EditableValuesContext => {
+  context.runtime.stop();
+  context.postMessageSpy.mockRestore();
+  return context;
+};
+
 describe('iteration inspector runtime edit mode', () => {
   test('should keep select mode active across repeated selections in persistent mode', async () => {
     return given(givenPersistentRuntime)
@@ -601,5 +777,17 @@ describe('iteration inspector runtime edit mode', () => {
       .when(whenPreviewEditsAreCleared)
       .then(thenNestedTextPreviewEditsRestoreOriginalChildren)
       .then(thenPreviewRuntimeIsStopped);
+  });
+
+  test('should include editable values when an element is selected', async () => {
+    return given(givenEditableValuesRuntime)
+      .when(whenEditableTargetIsSelected)
+      .then(thenSelectionCarriesEditableValues)
+      .then(thenSelectionIncludesResolvedLocator)
+      .then(thenEditableValuesRuntimeIsStopped);
+  });
+
+  test('should skip runtime startup outside embedded runtime contexts', async () => {
+    return given(() => undefined).then(thenTopLevelBootSkipsRuntimeStartup);
   });
 });

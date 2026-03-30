@@ -16,8 +16,13 @@ type PackageExportTarget = {
 };
 
 const buildRuntimeSelectionMessage = (
-  locatorOverrides: Record<string, unknown> = {},
+  options: {
+    editableValues?: Record<string, string>;
+    locatorOverrides?: Record<string, unknown>;
+  } = {},
 ) => {
+  const { editableValues, locatorOverrides = {} } = options;
+
   return {
     channel: ITERATION_INSPECTOR_CHANNEL,
     kind: 'element_selected',
@@ -46,6 +51,9 @@ const buildRuntimeSelectionMessage = (
         capturedAt: '2026-03-24T10:00:00.000Z',
         ...locatorOverrides,
       },
+      ...(editableValues !== undefined && {
+        editableValues,
+      }),
     },
   };
 };
@@ -214,8 +222,14 @@ test('iteration inspector runtime guards accept preview edit capability and stat
         active: true,
       },
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        editableValues: {
+          display: 'flex',
+          flexDirection: 'row',
+        },
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -257,20 +271,30 @@ test('iteration selection runtime guards remain compatible with additive compone
   expect(
     [
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        reactComponentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          reactComponentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', 'ToolbarButton'],
+        locatorOverrides: {
+          componentPath: ['AppShell', 'ToolbarButton'],
+        },
       }),
       buildRuntimeSelectionMessage({
-        componentPath: ['AppShell', ''],
+        locatorOverrides: {
+          componentPath: ['AppShell', ''],
+        },
       }),
       buildRuntimeSelectionMessage({
-        reactComponentPath: [],
+        locatorOverrides: {
+          reactComponentPath: [],
+        },
       }),
     ].map((message) => isIterationInspectorRuntimeMessage(message)),
   ).toStrictEqual([true, true, true, false, false]);

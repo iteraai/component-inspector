@@ -1,5 +1,11 @@
 # @iteraai/react-component-inspector
 
+## 0.4.0
+
+### Minor Changes
+
+- 11c1499: Expose editable values on iteration `element_selected` messages and improve preview-edit background handling in the example harness.
+
 ## 0.3.1
 
 ### Patch Changes

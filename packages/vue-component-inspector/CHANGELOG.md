@@ -1,5 +1,11 @@
 # @iteraai/vue-component-inspector
 
+## 0.2.0
+
+### Minor Changes
+
+- 11c1499: Expose editable values on iteration `element_selected` messages and improve preview-edit background handling in the example harness.
+
 ## 0.1.0
 
 ### Minor Changes

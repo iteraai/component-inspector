@@ -116,11 +116,8 @@ const givenPersistentRuntime = (): RuntimeEditModeContext => {
 const givenPreviewEditsRuntime = (): PreviewEditsContext => {
   document.body.innerHTML = `
     <main>
-      <div id="preview-target" data-testid="preview-card">Original copy</div>
-      <div id="preview-rich-target" data-testid="preview-rich-card">
-        <strong id="preview-rich-strong">Original</strong>
-        <span> nested copy</span>
-      </div>
+      <div id="preview-target" data-testid="preview-card" style="background: linear-gradient(135deg, rgb(10, 20, 30), rgb(40, 50, 60));">Original copy</div>
+      <div id="preview-rich-target" data-testid="preview-rich-card"><strong id="preview-rich-strong">Original</strong><span> nested copy</span></div>
       <img
         id="preview-image"
         alt="Preview"
@@ -335,6 +332,7 @@ const thenPreviewEditsAreApplied = (
   expect(context.targetTextNode.textContent).toBe('Updated copy');
   expect(context.target.style.width).toBe('240px');
   expect(context.target.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  expect(context.target.style.background).toContain('rgb(255, 0, 0)');
   expect(context.imageTarget.getAttribute('src')).toBe(
     'https://example.com/preview.png',
   );
@@ -380,7 +378,7 @@ const thenPreviewEditsAreRestored = (
   expect(context.targetTextNode.isConnected).toBe(true);
   expect(context.targetTextNode.textContent).toBe('Original copy');
   expect(context.target.style.width).toBe('');
-  expect(context.target.style.backgroundColor).toBe('');
+  expect(context.target.style.backgroundImage).toContain('linear-gradient');
   expect(context.imageTarget.getAttribute('src')).toBe('/initial.png');
   expect(context.imageTarget.getAttribute('srcset')).toBe(
     '/initial-small.png 1x, /initial-large.png 2x',

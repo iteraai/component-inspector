@@ -25,6 +25,7 @@ import {
   publishButtonDisplayName,
 } from './hostHarnessMessages';
 import type {
+  IterationEditableValues,
   IterationElementSelection,
   IterationPreviewEditOperation,
 } from '@iteraai/react-component-inspector/iterationInspector';
@@ -45,6 +46,17 @@ type PreviewEditDraft = {
   assetReference: string;
 };
 
+const previewEditDraftFields = [
+  'textContent',
+  'backgroundColor',
+  'textColor',
+  'padding',
+  'borderRadius',
+  'assetReference',
+] as const;
+
+type PreviewEditDraftField = (typeof previewEditDraftFields)[number];
+
 const createEmptyPreviewEditDraft = (): PreviewEditDraft => ({
   textContent: '',
   backgroundColor: '',
@@ -54,47 +66,107 @@ const createEmptyPreviewEditDraft = (): PreviewEditDraft => ({
   assetReference: '',
 });
 
+const parseCssColorToHex = (value: string) => {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return '#000000';
+  }
+
+  const probe = document.createElement('span');
+  probe.style.color = '';
+  probe.style.color = trimmedValue;
+
+  if (probe.style.color.length === 0) {
+    return '#000000';
+  }
+
+  document.body.appendChild(probe);
+  const resolvedColor = window.getComputedStyle(probe).color;
+  probe.remove();
+
+  const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(resolvedColor);
+
+  if (match === null) {
+    return '#000000';
+  }
+
+  const [, red, green, blue] = match;
+  return `#${[red, green, blue]
+    .map((channel) => Number(channel).toString(16).padStart(2, '0'))
+    .join('')}`;
+};
+
+const buildPreviewEditDraftFromEditableValues = (
+  editableValues?: IterationEditableValues,
+): PreviewEditDraft => {
+  return {
+    textContent: editableValues?.textContent ?? '',
+    backgroundColor: editableValues?.backgroundColor ?? '',
+    textColor: editableValues?.textColor ?? '',
+    padding: editableValues?.padding ?? '',
+    borderRadius: editableValues?.borderRadius ?? '',
+    assetReference: editableValues?.assetReference ?? '',
+  };
+};
+
 const toPreviewEditOperations = (
   draft: PreviewEditDraft,
+  baseline: PreviewEditDraft,
 ): ReadonlyArray<IterationPreviewEditOperation> => {
   const operations: IterationPreviewEditOperation[] = [];
 
-  if (draft.textContent.trim().length > 0) {
+  if (
+    draft.textContent.trim().length > 0 &&
+    draft.textContent !== baseline.textContent
+  ) {
     operations.push({
       fieldId: 'textContent',
       value: draft.textContent,
     });
   }
 
-  if (draft.backgroundColor.trim().length > 0) {
+  if (
+    draft.backgroundColor.trim().length > 0 &&
+    draft.backgroundColor !== baseline.backgroundColor
+  ) {
     operations.push({
       fieldId: 'backgroundColor',
       value: draft.backgroundColor,
     });
   }
 
-  if (draft.textColor.trim().length > 0) {
+  if (
+    draft.textColor.trim().length > 0 &&
+    draft.textColor !== baseline.textColor
+  ) {
     operations.push({
       fieldId: 'textColor',
       value: draft.textColor,
     });
   }
 
-  if (draft.padding.trim().length > 0) {
+  if (draft.padding.trim().length > 0 && draft.padding !== baseline.padding) {
     operations.push({
       fieldId: 'padding',
       value: draft.padding,
     });
   }
 
-  if (draft.borderRadius.trim().length > 0) {
+  if (
+    draft.borderRadius.trim().length > 0 &&
+    draft.borderRadius !== baseline.borderRadius
+  ) {
     operations.push({
       fieldId: 'borderRadius',
       value: draft.borderRadius,
     });
   }
 
-  if (draft.assetReference.trim().length > 0) {
+  if (
+    draft.assetReference.trim().length > 0 &&
+    draft.assetReference !== baseline.assetReference
+  ) {
     operations.push({
       fieldId: 'assetReference',
       value: draft.assetReference,
@@ -137,6 +209,17 @@ const resolveFixtureNodeId = (payload: unknown, displayName: string) => {
   return matchingNode?.id ?? null;
 };
 
+const isImageLikeSelection = (selection: IterationElementSelection | null) => {
+  if (selection === null) {
+    return false;
+  }
+
+  return (
+    selection.element.tagName === 'img' ||
+    (selection.editableValues?.assetReference?.length ?? 0) > 0
+  );
+};
+
 export const HostHarnessApp = () => {
   const params = new URLSearchParams(window.location.search);
   const initialEmbeddedUrl = params.get('embeddedUrl') ?? defaultEmbeddedUrl;
@@ -173,7 +256,18 @@ export const HostHarnessApp = () => {
   const [previewEditDraft, setPreviewEditDraft] = useState<PreviewEditDraft>(
     createEmptyPreviewEditDraft,
   );
+  const [previewEditBaseline, setPreviewEditBaseline] =
+    useState<PreviewEditDraft>(createEmptyPreviewEditDraft);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const imageLikeSelection = isImageLikeSelection(selectedElement);
+  const showContentControls =
+    selectedElement !== null && !imageLikeSelection;
+  const showColorControls =
+    selectedElement !== null && !imageLikeSelection;
+  const showSpacingControls =
+    selectedElement !== null && !imageLikeSelection;
+  const showAssetControls = selectedElement !== null && imageLikeSelection;
+  const showEffectsControls = selectedElement !== null;
 
   const appendLog = (
     direction: LogEntry['direction'],
@@ -255,7 +349,7 @@ export const HostHarnessApp = () => {
 
     previewRevisionRef.current += 1;
     const revision = previewRevisionRef.current;
-    const operations = toPreviewEditOperations(draft);
+    const operations = toPreviewEditOperations(draft, previewEditBaseline);
 
     if (operations.length === 0) {
       postToEmbedded(
@@ -295,7 +389,24 @@ export const HostHarnessApp = () => {
   };
 
   const handlePreviewEditFieldChange = (
-    field: keyof PreviewEditDraft,
+    field: PreviewEditDraftField,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const nextValue = event.currentTarget.value;
+
+    setPreviewEditDraft((currentDraft) => {
+      const nextDraft = {
+        ...currentDraft,
+        [field]: nextValue,
+      };
+
+      syncPreviewEdits(nextDraft);
+      return nextDraft;
+    });
+  };
+
+  const handlePreviewEditColorChange = (
+    field: 'backgroundColor' | 'textColor',
     event: ChangeEvent<HTMLInputElement>,
   ) => {
     const nextValue = event.currentTarget.value;
@@ -312,7 +423,7 @@ export const HostHarnessApp = () => {
   };
 
   const handleClearPreviewEdits = () => {
-    const nextDraft = createEmptyPreviewEditDraft();
+    const nextDraft = previewEditBaseline;
 
     setPreviewEditDraft(nextDraft);
     syncPreviewEdits(nextDraft);
@@ -330,6 +441,7 @@ export const HostHarnessApp = () => {
     setPreviewStatusSummary('No preview edits applied yet.');
     setPreviewStatusPayload('No preview edit status received yet.');
     setPreviewEditDraft(createEmptyPreviewEditDraft());
+    setPreviewEditBaseline(createEmptyPreviewEditDraft());
     previewRevisionRef.current = 0;
   }, [embeddedUrl]);
 
@@ -370,6 +482,23 @@ export const HostHarnessApp = () => {
 
         if (event.data.kind === 'element_selected') {
           setSelectedElement(event.data.selection);
+          const nextDraft = buildPreviewEditDraftFromEditableValues(
+            event.data.selection.editableValues,
+          );
+
+          setPreviewEditDraft(nextDraft);
+          setPreviewEditBaseline(nextDraft);
+          setPreviewStatusSummary(
+            event.data.selection.editableValues === undefined
+              ? `Selected ${event.data.selection.displayText}. No editable values were reported.`
+              : `Selected ${event.data.selection.displayText}. Debugger prefilled from editable values.`,
+          );
+          setPreviewStatusPayload(
+            prettyJson({
+              selection: event.data.selection.displayText,
+              editableValues: event.data.selection.editableValues ?? null,
+            }),
+          );
         }
 
         if (
@@ -583,94 +712,153 @@ export const HostHarnessApp = () => {
           <div className='example-column'>
             <article className='example-card example-code-card'>
               <p className='example-section-label'>Visual edit debugger</p>
+              <div className='example-debugger-header'>
+                <div>
+                  <p className='example-debugger-selection'>
+                    {selectedElement?.displayText ?? 'No active selection'}
+                  </p>
+                  <p className='example-debugger-copy'>
+                    {selectedElement?.editableValues === undefined
+                      ? 'Select an element to prefill the debugger from editable values.'
+                      : 'The inputs below are hydrated from the latest element_selected payload.'}
+                  </p>
+                  {imageLikeSelection ? (
+                    <p className='example-debugger-note'>
+                      Image selections prioritize asset replacement and border
+                      radius. Background color is intentionally hidden here
+                      because it is usually not visible on opaque images.
+                    </p>
+                  ) : null}
+                </div>
+                <div className='example-chip-row example-chip-row--compact'>
+                  <span className='example-chip'>
+                    {selectedElement?.element.tagName ?? 'no-tag'}
+                  </span>
+                  <span className='example-chip'>
+                    {selectedElement?.element.dataTestId ?? 'no-testid'}
+                  </span>
+                </div>
+              </div>
               <div className='example-edit-grid'>
-                <article className='example-edit-section'>
-                  <p className='example-section-label'>Content</p>
-                  <label className='example-field'>
-                    <span>Text content</span>
-                    <input
-                      className='example-input'
-                      onChange={(event) =>
-                        handlePreviewEditFieldChange('textContent', event)
-                      }
-                      placeholder='Ship faster'
-                      value={previewEditDraft.textContent}
-                    />
-                  </label>
-                </article>
-
-                <article className='example-edit-section'>
-                  <p className='example-section-label'>Colors</p>
-                  <div className='example-edit-section-grid'>
+                {showContentControls ? (
+                  <article className='example-edit-section'>
+                    <p className='example-section-label'>Content</p>
                     <label className='example-field'>
-                      <span>Background color</span>
+                      <span>Text content</span>
                       <input
                         className='example-input'
                         onChange={(event) =>
-                          handlePreviewEditFieldChange('backgroundColor', event)
+                          handlePreviewEditFieldChange('textContent', event)
                         }
-                        placeholder='#1f5eff'
-                        value={previewEditDraft.backgroundColor}
+                        placeholder='Ship faster'
+                        value={previewEditDraft.textContent}
                       />
                     </label>
+                  </article>
+                ) : null}
+
+                {showColorControls ? (
+                  <article className='example-edit-section'>
+                    <p className='example-section-label'>Colors</p>
+                    <div className='example-edit-section-grid'>
+                      <label className='example-field'>
+                        <span>Background color</span>
+                        <div className='example-color-control'>
+                          <input
+                            aria-label='Background color picker'
+                            className='example-color-input'
+                            onChange={(event) =>
+                              handlePreviewEditColorChange('backgroundColor', event)
+                            }
+                            type='color'
+                            value={parseCssColorToHex(previewEditDraft.backgroundColor)}
+                          />
+                          <input
+                            className='example-input'
+                            onChange={(event) =>
+                              handlePreviewEditFieldChange('backgroundColor', event)
+                            }
+                            placeholder='#1f5eff'
+                            value={previewEditDraft.backgroundColor}
+                          />
+                        </div>
+                      </label>
+                      <label className='example-field'>
+                        <span>Text color</span>
+                        <div className='example-color-control'>
+                          <input
+                            aria-label='Text color picker'
+                            className='example-color-input'
+                            onChange={(event) =>
+                              handlePreviewEditColorChange('textColor', event)
+                            }
+                            type='color'
+                            value={parseCssColorToHex(previewEditDraft.textColor)}
+                          />
+                          <input
+                            className='example-input'
+                            onChange={(event) =>
+                              handlePreviewEditFieldChange('textColor', event)
+                            }
+                            placeholder='#ffffff'
+                            value={previewEditDraft.textColor}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                  </article>
+                ) : null}
+
+                {showSpacingControls ? (
+                  <article className='example-edit-section'>
+                    <p className='example-section-label'>Spacing</p>
                     <label className='example-field'>
-                      <span>Text color</span>
+                      <span>Padding</span>
                       <input
                         className='example-input'
                         onChange={(event) =>
-                          handlePreviewEditFieldChange('textColor', event)
+                          handlePreviewEditFieldChange('padding', event)
                         }
-                        placeholder='#ffffff'
-                        value={previewEditDraft.textColor}
+                        placeholder='12px 18px'
+                        value={previewEditDraft.padding}
                       />
                     </label>
-                  </div>
-                </article>
+                  </article>
+                ) : null}
 
-                <article className='example-edit-section'>
-                  <p className='example-section-label'>Spacing</p>
-                  <label className='example-field'>
-                    <span>Padding</span>
-                    <input
-                      className='example-input'
-                      onChange={(event) =>
-                        handlePreviewEditFieldChange('padding', event)
-                      }
-                      placeholder='12px 18px'
-                      value={previewEditDraft.padding}
-                    />
-                  </label>
-                </article>
+                {showAssetControls ? (
+                  <article className='example-edit-section'>
+                    <p className='example-section-label'>Assets</p>
+                    <label className='example-field'>
+                      <span>Asset URL</span>
+                      <input
+                        className='example-input'
+                        onChange={(event) =>
+                          handlePreviewEditFieldChange('assetReference', event)
+                        }
+                        placeholder='https://example.com/replacement.png'
+                        value={previewEditDraft.assetReference}
+                      />
+                    </label>
+                  </article>
+                ) : null}
 
-                <article className='example-edit-section'>
-                  <p className='example-section-label'>Assets</p>
-                  <label className='example-field'>
-                    <span>Asset URL</span>
-                    <input
-                      className='example-input'
-                      onChange={(event) =>
-                        handlePreviewEditFieldChange('assetReference', event)
-                      }
-                      placeholder='https://example.com/replacement.png'
-                      value={previewEditDraft.assetReference}
-                    />
-                  </label>
-                </article>
-
-                <article className='example-edit-section'>
-                  <p className='example-section-label'>Effects</p>
-                  <label className='example-field'>
-                    <span>Border radius</span>
-                    <input
-                      className='example-input'
-                      onChange={(event) =>
-                        handlePreviewEditFieldChange('borderRadius', event)
-                      }
-                      placeholder='20px'
-                      value={previewEditDraft.borderRadius}
-                    />
-                  </label>
-                </article>
+                {showEffectsControls ? (
+                  <article className='example-edit-section'>
+                    <p className='example-section-label'>Effects</p>
+                    <label className='example-field'>
+                      <span>Border radius</span>
+                      <input
+                        className='example-input'
+                        onChange={(event) =>
+                          handlePreviewEditFieldChange('borderRadius', event)
+                        }
+                        placeholder='20px'
+                        value={previewEditDraft.borderRadius}
+                      />
+                    </label>
+                  </article>
+                ) : null}
 
                 <div className='example-button-row'>
                   <button
@@ -688,6 +876,23 @@ export const HostHarnessApp = () => {
                     Clear preview edits
                   </button>
                 </div>
+              </div>
+              <div className='example-draft-grid'>
+                {previewEditDraftFields.map((field) => {
+                  const value = previewEditDraft[field];
+                  const baselineValue = previewEditBaseline[field];
+                  const isDirty = value !== baselineValue;
+
+                  return (
+                    <div
+                      key={field}
+                      className={`example-draft-chip${isDirty ? ' example-draft-chip--dirty' : ''}`}
+                    >
+                      <span>{field}</span>
+                      <strong>{value.length > 0 ? value : '(empty)'}</strong>
+                    </div>
+                  );
+                })}
               </div>
               <p className='example-edit-status'>{previewStatusSummary}</p>
               <pre>{previewStatusPayload}</pre>

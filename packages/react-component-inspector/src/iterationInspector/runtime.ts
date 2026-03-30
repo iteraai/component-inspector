@@ -1751,6 +1751,12 @@ const applyPreviewOperation = (
     } as const;
   }
 
+  if (operation.fieldId === 'backgroundColor') {
+    // Previewing a background color should visibly override shorthand/layered
+    // backgrounds used by the underlying app styles.
+    previewSession.recordStyle(element, 'background', normalizedStyleValue);
+  }
+
   previewSession.recordStyle(element, stylePropertyName, normalizedStyleValue);
   return null;
 };

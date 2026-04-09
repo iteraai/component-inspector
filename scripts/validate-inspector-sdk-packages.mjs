@@ -62,13 +62,40 @@ const sdkPackages = [
       'dist/iterationInspector/index.d.ts',
       'package.json'
     ]
+  },
+  {
+    directory: path.join(repoRoot, 'packages/angular-component-inspector'),
+    name: '@iteraai/angular-component-inspector',
+    requiredFiles: [
+      'README.md',
+      'builders.json',
+      'schemas/application.schema.json',
+      'schemas/dev-server.schema.json',
+      'dist/index.js',
+      'dist/index.d.ts',
+      'dist/embeddedBootstrap.js',
+      'dist/embeddedBootstrap.d.ts',
+      'dist/bridgeRuntime.js',
+      'dist/bridgeRuntime.d.ts',
+      'dist/iterationInspector.js',
+      'dist/iterationInspector/index.d.ts',
+      'dist/builders/application.js',
+      'dist/builders/application.d.ts',
+      'dist/builders/devServer.js',
+      'dist/builders/devServer.d.ts',
+      'package.json'
+    ]
   }
 ];
 
-const run = (command, args, cwd) => {
+const run = (command, args, cwd, envOverrides = {}) => {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...envOverrides,
+    },
     stdio: 'pipe'
   });
 
@@ -107,11 +134,12 @@ const validatePackContents = (packageDefinition, packedFiles) => {
   }
 };
 
-const packPackage = (packageDefinition, packDestination) => {
+const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
   const rawPackResult = run(
     'npm',
     ['pack', '--json', '--pack-destination', packDestination, '--silent'],
     packageDefinition.directory,
+    npmEnvironment,
   );
   const jsonPayload = rawPackResult.match(/(\[\s*\{[\s\S]*\])\s*$/)?.[1];
 
@@ -131,14 +159,18 @@ const fixturePackageJson = (
   protocolTarball,
   reactBridgeTarball,
   vueBridgeTarball,
+  angularBridgeTarball,
 ) => ({
   name: 'inspector-sdk-pack-smoke',
+  version: '0.0.0',
   private: true,
   type: 'module',
   dependencies: {
     '@iteraai/inspector-protocol': `file:${protocolTarball}`,
     '@iteraai/react-component-inspector': `file:${reactBridgeTarball}`,
     '@iteraai/vue-component-inspector': `file:${vueBridgeTarball}`,
+    '@iteraai/angular-component-inspector': `file:${angularBridgeTarball}`,
+    '@angular/core': '^21.0.0',
     react: '19.2.4',
     'react-dom': '19.2.4',
     vue: '^3.5.0'
@@ -169,6 +201,17 @@ import { createInspectorProtocolError } from '@iteraai/inspector-protocol/errors
 import { normalizeOrigin } from '@iteraai/inspector-protocol/origins';
 import type { TreeNode } from '@iteraai/inspector-protocol/types';
 import { isInspectorMessage } from '@iteraai/inspector-protocol/validators';
+import {
+  angularInspectorRequiredDevModeGlobalNames,
+  resolveAngularInspectorRuntimeConfig,
+  type AngularInspectorRuntimeConfig,
+} from '@iteraai/angular-component-inspector';
+import { bootstrapEmbeddedInspectorBridge as bootstrapAngularEmbeddedInspectorBridge } from '@iteraai/angular-component-inspector/embeddedBootstrap';
+import { initInspectorBridge as initAngularInspectorBridge } from '@iteraai/angular-component-inspector/bridgeRuntime';
+import {
+  ITERATION_INSPECTOR_CHANNEL as ANGULAR_ITERATION_INSPECTOR_CHANNEL,
+  type IterationInspectorRuntimeMessage as AngularIterationInspectorRuntimeMessage,
+} from '@iteraai/angular-component-inspector/iterationInspector';
 import {
   resolveReactInspectorRuntimeConfig,
   type ReactInspectorRuntimeConfig,
@@ -205,6 +248,22 @@ const runtimeConfig: ReactInspectorRuntimeConfig = {
     tree: false,
   },
 };
+const angularRuntimeConfig: AngularInspectorRuntimeConfig = {
+  adapter: 'angular-dev-mode-globals',
+  capabilities: {
+    props: false,
+  },
+  angularGlobals: null,
+};
+const angularRuntimeMessage: AngularIterationInspectorRuntimeMessage = {
+  channel: ANGULAR_ITERATION_INSPECTOR_CHANNEL,
+  kind: 'runtime_ready',
+  urlPath: '/',
+};
+const angularBootstrapFn: typeof bootstrapAngularEmbeddedInspectorBridge =
+  bootstrapAngularEmbeddedInspectorBridge;
+const initAngularBridgeFn: typeof initAngularInspectorBridge =
+  initAngularInspectorBridge;
 const runtimeMessage: ReactIterationInspectorRuntimeMessage = {
   channel: REACT_ITERATION_INSPECTOR_CHANNEL,
   kind: 'runtime_ready',
@@ -236,12 +295,19 @@ const initVueBridgeFn: typeof initVueInspectorBridge = initVueInspectorBridge;
 const protocolError = createInspectorProtocolError('ERR_NODE_NOT_FOUND');
 const resolvedOrigin = normalizeOrigin('https://itera.ai/path');
 const isPingMessage = isInspectorMessage(ping);
+const requiredAngularGlobals = angularInspectorRequiredDevModeGlobalNames;
+const resolvedAngularRuntimeConfig = resolveAngularInspectorRuntimeConfig(
+  angularRuntimeConfig,
+);
 const resolvedRuntimeConfig = resolveReactInspectorRuntimeConfig(runtimeConfig);
 const resolvedVueRuntimeConfig = resolveVueInspectorRuntimeConfig(
   vueRuntimeConfig,
 );
 
 void treeNode;
+void angularRuntimeMessage;
+void angularBootstrapFn;
+void initAngularBridgeFn;
 void runtimeMessage;
 void bootstrapFn;
 void initBridgeFn;
@@ -250,6 +316,8 @@ void storybookPreviewOrigins;
 void vueRuntimeMessage;
 void vueBootstrapFn;
 void initVueBridgeFn;
+void requiredAngularGlobals;
+void resolvedAngularRuntimeConfig;
 void resolvedRuntimeConfig;
 void resolvedVueRuntimeConfig;
 
@@ -271,6 +339,19 @@ import {
 import { createInspectorProtocolError } from '@iteraai/inspector-protocol/errors';
 import { normalizeOrigin } from '@iteraai/inspector-protocol/origins';
 import { isInspectorMessage } from '@iteraai/inspector-protocol/validators';
+import {
+  angularInspectorRequiredDevModeGlobalNames,
+  angularInspectorRuntimeAdapterTargets,
+  defaultAngularInspectorRuntimeConfig,
+  hasRequiredAngularDevModeGlobals,
+  resolveAngularInspectorRuntimeConfig,
+} from '@iteraai/angular-component-inspector';
+import { bootstrapEmbeddedInspectorBridge as bootstrapAngularEmbeddedInspectorBridge } from '@iteraai/angular-component-inspector/embeddedBootstrap';
+import { initInspectorBridge as initAngularInspectorBridge } from '@iteraai/angular-component-inspector/bridgeRuntime';
+import {
+  ITERATION_INSPECTOR_CHANNEL as ANGULAR_ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorRuntimeMessage as isAngularIterationInspectorRuntimeMessage,
+} from '@iteraai/angular-component-inspector/iterationInspector';
 import {
   defaultReactInspectorRuntimeConfig,
   resolveReactInspectorRuntimeConfig,
@@ -325,6 +406,68 @@ assert.deepEqual(createInspectorProtocolError('ERR_NODE_NOT_FOUND'), {
   message: 'Requested node was not found.',
 });
 assert.equal(normalizeOrigin('https://itera.ai/path?q=1'), 'https://itera.ai');
+assert.deepEqual(angularInspectorRuntimeAdapterTargets, [
+  'auto',
+  'angular-dev-mode-globals',
+  'noop',
+]);
+assert.deepEqual(angularInspectorRequiredDevModeGlobalNames, [
+  'getComponent',
+  'getOwningComponent',
+  'getHostElement',
+  'getDirectiveMetadata',
+]);
+assert.equal(defaultAngularInspectorRuntimeConfig.adapter, 'auto');
+assert.deepEqual(defaultAngularInspectorRuntimeConfig.capabilities, {
+  tree: true,
+  props: true,
+  highlight: true,
+});
+assert.equal(
+  hasRequiredAngularDevModeGlobals({
+    getComponent() {
+      return null;
+    },
+    getOwningComponent() {
+      return null;
+    },
+    getHostElement() {
+      return null;
+    },
+    getDirectiveMetadata() {
+      return null;
+    },
+  }),
+  true,
+);
+assert.deepEqual(
+  resolveAngularInspectorRuntimeConfig({
+    adapter: 'angular-dev-mode-globals',
+    capabilities: {
+      props: false,
+    },
+    angularGlobals: null,
+  }),
+  {
+    adapter: 'angular-dev-mode-globals',
+    capabilities: {
+      tree: true,
+      props: false,
+      highlight: true,
+    },
+    angularGlobals: null,
+  },
+);
+assert.equal(typeof bootstrapAngularEmbeddedInspectorBridge, 'function');
+assert.equal(typeof initAngularInspectorBridge, 'function');
+assert.equal(
+  isAngularIterationInspectorRuntimeMessage({
+    channel: ANGULAR_ITERATION_INSPECTOR_CHANNEL,
+    kind: 'runtime_ready',
+    urlPath: '/preview',
+  }),
+  true,
+);
 assert.deepEqual(defaultReactInspectorRuntimeConfig, {
   adapter: 'auto',
   capabilities: {
@@ -435,14 +578,36 @@ const main = () => {
   );
   const packDestination = path.join(tempRoot, 'packed');
   const fixtureDirectory = path.join(tempRoot, 'fixture');
+  const npmCacheDirectory = path.join(tempRoot, 'npm-cache');
+  const npmEnvironment = {
+    npm_config_cache: npmCacheDirectory,
+  };
 
   fs.mkdirSync(packDestination, { recursive: true });
   fs.mkdirSync(fixtureDirectory, { recursive: true });
+  fs.mkdirSync(npmCacheDirectory, { recursive: true });
 
   try {
-    const protocolTarball = packPackage(sdkPackages[0], packDestination);
-    const reactBridgeTarball = packPackage(sdkPackages[1], packDestination);
-    const vueBridgeTarball = packPackage(sdkPackages[2], packDestination);
+    const protocolTarball = packPackage(
+      sdkPackages[0],
+      packDestination,
+      npmEnvironment,
+    );
+    const reactBridgeTarball = packPackage(
+      sdkPackages[1],
+      packDestination,
+      npmEnvironment,
+    );
+    const vueBridgeTarball = packPackage(
+      sdkPackages[2],
+      packDestination,
+      npmEnvironment,
+    );
+    const angularBridgeTarball = packPackage(
+      sdkPackages[3],
+      packDestination,
+      npmEnvironment,
+    );
 
     fs.writeFileSync(
       path.join(fixtureDirectory, 'package.json'),
@@ -451,6 +616,7 @@ const main = () => {
           protocolTarball,
           reactBridgeTarball,
           vueBridgeTarball,
+          angularBridgeTarball,
         ),
         null,
         2,
@@ -469,8 +635,13 @@ const main = () => {
       fixtureRuntimeSmoke,
     );
 
-    run('npm', ['install'], fixtureDirectory);
-    run('npx', ['tsc', '--noEmit'], fixtureDirectory);
+    run(
+      'npm',
+      ['install', '--legacy-peer-deps'],
+      fixtureDirectory,
+      npmEnvironment,
+    );
+    run('npx', ['tsc', '--noEmit'], fixtureDirectory, npmEnvironment);
     run('node', ['smoke-runtime.mjs'], fixtureDirectory);
   } catch (error) {
     console.error(

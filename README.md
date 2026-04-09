@@ -1,11 +1,11 @@
 # component-inspector
 
-Public monorepo for the Itera component inspector SDK packages. It currently includes the React and Vue client SDK packages, alongside the shared protocol package `@iteraai/inspector-protocol`.
+Public monorepo for the Itera component inspector SDK packages. It currently includes the React, Vue, and Angular client SDK packages, alongside the shared protocol package `@iteraai/inspector-protocol`.
 
 The package names and import paths in this repo are the intended public contract. Releases are managed with
 Changesets and an automated GitHub Actions release PR flow so package changes land with explicit semver intent.
 
-Detailed customer integration guidance now lives at [iteraai.github.io/docs](https://iteraai.github.io/docs/). Start with [Getting Started](https://iteraai.github.io/docs/getting-started) and the [Inspector Overview](https://iteraai.github.io/docs/inspector/). The README files in this repo stay focused on package summaries, quick starts, and local repository workflows for npm and GitHub readers. The current docs site is React-focused; the Vue package README covers the supported Vue runtime and bootstrap contract until dedicated Vue docs land.
+Detailed customer integration guidance now lives at [iteraai.github.io/docs](https://iteraai.github.io/docs/). Start with [Getting Started](https://iteraai.github.io/docs/getting-started) and the [Inspector Overview](https://iteraai.github.io/docs/inspector/). The README files in this repo stay focused on package summaries, quick starts, and local repository workflows for npm and GitHub readers. The current docs site is React-focused; the Vue and Angular package READMEs cover their supported runtime and bootstrap contracts until dedicated framework docs land.
 
 ## Documentation
 
@@ -24,6 +24,7 @@ Detailed customer integration guidance now lives at [iteraai.github.io/docs](htt
 | `@iteraai/inspector-protocol`        | [`packages/inspector-protocol`](./packages/inspector-protocol)               | Shared protocol constants, message builders, validators, origin helpers, and inspector security event constants.  |
 | `@iteraai/react-component-inspector` | [`packages/react-component-inspector`](./packages/react-component-inspector) | Embedded React bridge, iteration inspector runtime, runtime telemetry helpers, and adapter/runtime configuration. |
 | `@iteraai/vue-component-inspector`   | [`packages/vue-component-inspector`](./packages/vue-component-inspector)     | Embedded Vue bridge, mounted-app registration/bootstrap helpers, iteration inspector runtime, and adapter/runtime configuration. |
+| `@iteraai/angular-component-inspector` | [`packages/angular-component-inspector`](./packages/angular-component-inspector) | Embedded Angular bridge, Angular CLI source metadata builders, iteration inspector runtime, and adapter/runtime configuration. |
 
 The repo is intentionally a monorepo so framework packages can share the same protocol and release flow without changing the repository layout.
 
@@ -51,7 +52,8 @@ For the first publish only, maintainers should either:
 - or publish the first release manually from the release PR commit and configure trusted publishers before the next release
 
 After the package pages exist, configure npm trusted publishers for `@iteraai/inspector-protocol`,
-`@iteraai/react-component-inspector`, and `@iteraai/vue-component-inspector` to point at `iteraai/component-inspector` and
+`@iteraai/react-component-inspector`, `@iteraai/vue-component-inspector`, and
+`@iteraai/angular-component-inspector` to point at `iteraai/component-inspector` and
 `.github/workflows/release.yml`, then remove any bootstrap token path. Future releases should rely on trusted
 publishing only.
 
@@ -87,7 +89,7 @@ At a high level:
 
 ## Supported Runtimes
 
-The current supported customer runtimes are browser-based React and Vue apps embedded in the hosted editor flow.
+The current supported customer runtimes are browser-based React, Vue, and Angular apps embedded in the hosted editor flow.
 
 - `@iteraai/react-component-inspector` is the React SDK package published from this repo today.
 - React peer dependency support is `^18.3.0 || ^19.0.0`.
@@ -98,6 +100,10 @@ The current supported customer runtimes are browser-based React and Vue apps emb
 - Exported Vue adapter targets are `auto` and `vue3`.
 - Vue consumers should prefer explicit app registration via `bootstrapEmbeddedInspectorBridgeOnMount(...)` or `registerVueAppOnMount(...)`; mounted-app DOM discovery is fallback behavior.
 - Bootstrap the Vue bridge during client startup, before or immediately around `app.mount(...)`, so the mounted app registry is ready as the app becomes interactive.
+- `@iteraai/angular-component-inspector` is the Angular SDK package included in this repo.
+- Angular peer dependency support is `^18.0.0 || ^19.0.0 || ^20.0.0 || ^21.0.0`.
+- Exported Angular adapter targets are `auto`, `angular-dev-mode-globals`, and `noop`.
+- Angular source metadata support requires the package-provided Angular CLI `build` and `serve` builders in development mode.
 - Future platform packages should be added under `packages/` instead of split into separate repositories.
 
 ## Contract Identifiers
@@ -117,6 +123,7 @@ Those strings are part of the public integration surface and should not be renam
 examples/
   component-inspector-example-consumer/
 packages/
+  angular-component-inspector/
   inspector-protocol/
   react-component-inspector/
   vue-component-inspector/
@@ -127,6 +134,7 @@ scripts/
 Package-level summaries live in:
 
 - [`packages/inspector-protocol/README.md`](./packages/inspector-protocol/README.md)
+- [`packages/angular-component-inspector/README.md`](./packages/angular-component-inspector/README.md)
 - [`packages/react-component-inspector/README.md`](./packages/react-component-inspector/README.md)
 - [`packages/vue-component-inspector/README.md`](./packages/vue-component-inspector/README.md)
 
@@ -155,6 +163,7 @@ Useful package-scoped commands:
 
 ```bash
 npm run test --workspace @iteraai/inspector-protocol
+npm run test --workspace @iteraai/angular-component-inspector
 npm run test --workspace @iteraai/react-component-inspector
 npm run test --workspace @iteraai/vue-component-inspector
 npm run lint:ci --workspace @iteraai/react-component-inspector

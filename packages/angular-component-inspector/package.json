@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "type": "module",
-  "description": "Browser bridge, iteration runtime, and Angular CLI builder scaffold for the Itera Angular component inspector SDK.",
+  "description": "Browser bridge, iteration runtime, and Angular CLI source metadata builders for the Itera Angular component inspector SDK.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

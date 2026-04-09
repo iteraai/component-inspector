@@ -1,4 +1,5 @@
 import { buildMessage } from '@iteraai/inspector-protocol';
+import { inspectorHighlightOverlaySelector } from '../../inspector-runtime-core/src/highlighter';
 import { MAX_TREE_SNAPSHOT_NODE_COUNT } from '../../inspector-runtime-core/src/treeAdapter';
 import { destroyInspectorBridge, initInspectorBridge } from './bridgeRuntime';
 import type { AngularDevModeGlobalsApi } from './adapters/angular';
@@ -12,6 +13,7 @@ type AngularComponentRegistration = {
   hostElement: Element;
   owner?: object | null;
   componentElements?: readonly Element[];
+  directiveMetadata?: Record<string, unknown> | null;
 };
 
 type WindowWithAngularGlobals = Window & {
@@ -39,6 +41,10 @@ const createAngularGlobalsDouble = (
   const componentByElement = new Map<Element, object>();
   const hostElementByComponent = new Map<object, Element>();
   const ownerByTarget = new Map<Element | object, object | null>();
+  const directiveMetadataByComponent = new Map<
+    object,
+    Record<string, unknown> | null
+  >();
 
   registrations.forEach((registration) => {
     componentByElement.set(registration.hostElement, registration.component);
@@ -48,6 +54,10 @@ const createAngularGlobalsDouble = (
     hostElementByComponent.set(registration.component, registration.hostElement);
     ownerByTarget.set(registration.component, registration.owner ?? null);
     ownerByTarget.set(registration.hostElement, registration.owner ?? null);
+    directiveMetadataByComponent.set(
+      registration.component,
+      registration.directiveMetadata ?? null,
+    );
   });
 
   return {
@@ -60,14 +70,17 @@ const createAngularGlobalsDouble = (
     getHostElement: vi.fn((target: object) => {
       return hostElementByComponent.get(target) ?? null;
     }),
-    getDirectiveMetadata: vi.fn(() => null),
+    getDirectiveMetadata: vi.fn((target: object) => {
+      return directiveMetadataByComponent.get(target) ?? null;
+    }),
   };
 };
 
 const postHostMessage = (options: {
   hostOrigin: string;
   source: SourceDouble;
-  type: 'HELLO' | 'REQUEST_TREE';
+  type: 'HELLO' | 'REQUEST_TREE' | 'REQUEST_NODE_PROPS' | 'HIGHLIGHT_NODE';
+  nodeId?: string;
 }) => {
   window.dispatchEvent(
     new MessageEvent('message', {
@@ -79,7 +92,12 @@ const postHostMessage = (options: {
           ? {
               capabilities: ['host-tree'],
             }
-          : {},
+          : options.type === 'REQUEST_NODE_PROPS' ||
+              options.type === 'HIGHLIGHT_NODE'
+            ? {
+                nodeId: options.nodeId as string,
+              }
+            : {},
       ),
     }),
   );
@@ -419,4 +437,269 @@ test('bridge responds with truncated TREE_SNAPSHOT metadata for oversized Angula
     includedNodeCount: MAX_TREE_SNAPSHOT_NODE_COUNT,
     truncatedNodeCount: totalNodeCount - MAX_TREE_SNAPSHOT_NODE_COUNT,
   });
+});
+
+test('bridge serializes Angular node props from public input metadata and highlights projected components via host elements', () => {
+  const hostOrigin = 'https://app.iteradev.ai';
+  const source = createSourceDouble();
+  const outerShellElement = document.createElement('outer-shell');
+  const toolbarPanelElement = document.createElement('toolbar-panel');
+  const projectedCardElement = document.createElement('projected-card');
+  const projectedCardLabelElement = document.createElement('span');
+  const outerShellComponent = createAngularComponentDouble('OuterShell');
+  const toolbarPanelComponent = Object.assign(
+    createAngularComponentDouble('ToolbarPanel'),
+    {
+      panelTitle: 'Toolbar',
+      panelConfig: {
+        sections: ['actions', 'activity'],
+        collapsed: false,
+      },
+      actionHandler: function publish() {
+        return undefined;
+      },
+      hostRef: projectedCardElement,
+    },
+  );
+  const projectedCardComponent = createAngularComponentDouble('ProjectedCard');
+  const angularGlobals = createAngularGlobalsDouble([
+    {
+      component: outerShellComponent,
+      hostElement: outerShellElement,
+      owner: null,
+    },
+    {
+      component: toolbarPanelComponent,
+      hostElement: toolbarPanelElement,
+      owner: outerShellComponent,
+      directiveMetadata: {
+        inputs: {
+          action: 'actionHandler',
+          config: 'panelConfig',
+          host: 'hostRef',
+          title: 'panelTitle',
+        },
+      },
+    },
+    {
+      component: projectedCardComponent,
+      hostElement: projectedCardElement,
+      owner: toolbarPanelComponent,
+      componentElements: [projectedCardLabelElement],
+    },
+  ]);
+
+  projectedCardElement.append(projectedCardLabelElement);
+  outerShellElement.append(toolbarPanelElement, projectedCardElement);
+  document.body.append(outerShellElement);
+  vi.spyOn(projectedCardElement, 'getBoundingClientRect').mockReturnValue({
+    bottom: 112,
+    height: 78,
+    left: 12,
+    right: 68,
+    top: 34,
+    width: 56,
+    x: 12,
+    y: 34,
+    toJSON: () => {
+      return {};
+    },
+  } as DOMRect);
+
+  initInspectorBridge({
+    hostOrigins: [hostOrigin],
+    enabled: true,
+    capabilities: ['tree', 'props', 'highlight'],
+    runtimeConfig: {
+      adapter: 'angular-dev-mode-globals',
+      angularGlobals,
+    },
+  });
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'HELLO',
+  });
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'REQUEST_TREE',
+  });
+
+  const treeSnapshotMessage = getPostedMessagesByType<{
+    nodes: Array<{
+      id: string;
+      displayName: string;
+    }>;
+  }>(source, 'TREE_SNAPSHOT')[0];
+  const toolbarPanelNodeId = treeSnapshotMessage?.payload.nodes.find(
+    (node) => node.displayName === 'ToolbarPanel',
+  )?.id;
+  const projectedCardNodeId = treeSnapshotMessage?.payload.nodes.find(
+    (node) => node.displayName === 'ProjectedCard',
+  )?.id;
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'REQUEST_NODE_PROPS',
+    nodeId: toolbarPanelNodeId,
+  });
+
+  const nodePropsMessage = getPostedMessagesByType<{
+    nodeId: string;
+    props: Record<string, unknown>;
+    meta: Record<string, unknown>;
+  }>(source, 'NODE_PROPS')[0];
+
+  expect(nodePropsMessage?.payload).toEqual({
+    nodeId: toolbarPanelNodeId,
+    props: {
+      action: {
+        __iteraType: 'function',
+        preview: 'publish',
+      },
+      config: {
+        collapsed: false,
+        sections: ['actions', 'activity'],
+      },
+      host: {
+        __iteraType: 'dom-node',
+        preview: '<projected-card>',
+      },
+      title: 'Toolbar',
+    },
+    meta: {},
+  });
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'HIGHLIGHT_NODE',
+    nodeId: projectedCardNodeId,
+  });
+
+  expect(angularGlobals.getHostElement).toHaveBeenCalledWith(projectedCardComponent);
+
+  const overlay = document.querySelector(
+    inspectorHighlightOverlaySelector,
+  ) as HTMLDivElement | null;
+
+  expect(overlay?.style.display).toBe('block');
+  expect(overlay?.style.left).toBe('12px');
+  expect(overlay?.style.top).toBe('34px');
+  expect(overlay?.style.width).toBe('56px');
+  expect(overlay?.style.height).toBe('78px');
+});
+
+test('bridge preserves missing-node error semantics for Angular props and highlight requests', () => {
+  const hostOrigin = 'https://app.iteradev.ai';
+  const source = createSourceDouble();
+  const toolbarPanelElement = document.createElement('toolbar-panel');
+  const toolbarPanelComponent = createAngularComponentDouble('ToolbarPanel');
+  const angularGlobals = createAngularGlobalsDouble([
+    {
+      component: toolbarPanelComponent,
+      hostElement: toolbarPanelElement,
+      owner: null,
+    },
+  ]);
+
+  document.body.append(toolbarPanelElement);
+  vi.spyOn(toolbarPanelElement, 'getBoundingClientRect').mockReturnValue({
+    bottom: 40,
+    height: 20,
+    left: 10,
+    right: 30,
+    top: 20,
+    width: 20,
+    x: 10,
+    y: 20,
+    toJSON: () => {
+      return {};
+    },
+  } as DOMRect);
+
+  initInspectorBridge({
+    hostOrigins: [hostOrigin],
+    enabled: true,
+    capabilities: ['tree', 'props', 'highlight'],
+    runtimeConfig: {
+      adapter: 'angular-dev-mode-globals',
+      angularGlobals,
+    },
+  });
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'HELLO',
+  });
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'REQUEST_TREE',
+  });
+
+  const treeSnapshotMessage = getPostedMessagesByType<{
+    nodes: Array<{
+      id: string;
+      displayName: string;
+    }>;
+  }>(source, 'TREE_SNAPSHOT')[0];
+  const toolbarPanelNodeId = treeSnapshotMessage?.payload.nodes.find(
+    (node) => node.displayName === 'ToolbarPanel',
+  )?.id as string;
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'HIGHLIGHT_NODE',
+    nodeId: toolbarPanelNodeId,
+  });
+
+  const overlay = document.querySelector(
+    inspectorHighlightOverlaySelector,
+  ) as HTMLDivElement | null;
+
+  expect(overlay?.style.display).toBe('block');
+
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'REQUEST_NODE_PROPS',
+    nodeId: 'missing-node-id',
+  });
+  postHostMessage({
+    hostOrigin,
+    source,
+    type: 'HIGHLIGHT_NODE',
+    nodeId: 'missing-node-id',
+  });
+
+  const errorMessages = getPostedMessagesByType<{
+    code: string;
+    details?: {
+      nodeId?: string;
+    };
+  }>(source, 'ERROR');
+
+  expect(errorMessages.map((message) => message.payload)).toEqual([
+    {
+      code: 'ERR_NODE_NOT_FOUND',
+      message: 'Requested node was not found.',
+      details: {
+        nodeId: 'missing-node-id',
+      },
+    },
+    {
+      code: 'ERR_NODE_NOT_FOUND',
+      message: 'Requested node was not found.',
+      details: {
+        nodeId: 'missing-node-id',
+      },
+    },
+  ]);
+  expect(overlay?.style.display).toBe('none');
 });

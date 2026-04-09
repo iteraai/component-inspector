@@ -1,5 +1,6 @@
 node_modules/
 .turbo/
+.angular/
 coverage/
 dist/
 .DS_Store

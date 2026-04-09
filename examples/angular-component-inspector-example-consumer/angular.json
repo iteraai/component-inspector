@@ -1,0 +1,65 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": ".",
+  "projects": {
+    "angular-component-inspector-example-consumer": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "itera",
+      "architect": {
+        "build": {
+          "builder": "@iteraai/angular-component-inspector:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "polyfills": ["zone.js"],
+            "tsConfig": "tsconfig.app.json",
+            "styles": ["src/styles.css"],
+            "outputPath": "dist/angular-component-inspector-example-consumer",
+            "inspectorSourceMetadata": {
+              "enabled": true
+            }
+          },
+          "configurations": {
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
+            "production": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "serve": {
+          "builder": "@iteraai/angular-component-inspector:dev-server",
+          "options": {
+            "buildTarget": "angular-component-inspector-example-consumer:build:development",
+            "port": 4175,
+            "host": "127.0.0.1",
+            "inspectorSourceMetadata": {
+              "enabled": true
+            }
+          },
+          "configurations": {
+            "development": {
+              "buildTarget": "angular-component-inspector-example-consumer:build:development"
+            },
+            "production": {
+              "buildTarget": "angular-component-inspector-example-consumer:build:production"
+            }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  },
+  "cli": {
+    "analytics": false
+  }
+}

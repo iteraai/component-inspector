@@ -17,6 +17,9 @@
     "test:react": {
       "dependsOn": ["^build"]
     },
+    "test:angular": {
+      "dependsOn": ["^build"]
+    },
     "test:vue": {
       "dependsOn": ["^build"]
     },

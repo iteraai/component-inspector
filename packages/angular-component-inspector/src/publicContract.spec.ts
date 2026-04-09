@@ -125,6 +125,7 @@ test('package exports and runtime entrypoints stay stable', () => {
       types: './dist/iterationInspector/index.d.ts',
       import: './dist/iterationInspector.js',
     },
+    './package.json': './package.json',
   });
   expect(readPackageJson().description).toBe(
     'Browser bridge, iteration runtime, and Angular CLI source metadata builders for the Itera Angular component inspector SDK.',

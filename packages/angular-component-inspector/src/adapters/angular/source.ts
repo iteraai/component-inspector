@@ -54,14 +54,21 @@ const normalizeAngularTreeNodeSource = (
     return undefined;
   }
 
-  const file = toNonEmptyString(readObjectValue(value, 'file'));
-  const line = toPositiveInteger(readObjectValue(value, 'line'));
+  const file = toNonEmptyString(
+    readObjectValue(value, 'file') ?? readObjectValue(value, 'filePath'),
+  );
+  const line = toPositiveInteger(
+    readObjectValue(value, 'line') ?? readObjectValue(value, 'lineNumber'),
+  );
 
   if (file === undefined || line === undefined) {
     return undefined;
   }
 
-  const column = toPositiveInteger(readObjectValue(value, 'column'));
+  const column = toPositiveInteger(
+    readObjectValue(value, 'column') ??
+      readObjectValue(value, 'columnNumber'),
+  );
 
   return column === undefined
     ? {
@@ -100,16 +107,29 @@ const toSourceMetadataTargets = (value: unknown) => {
   return metadataTargets;
 };
 
+const getAngularDebugInfoMetadata = (value: object) => {
+  const componentDefinition = readObjectValue(value, 'ɵcmp');
+
+  if (!isInspectableObject(componentDefinition)) {
+    return undefined;
+  }
+
+  return readObjectValue(componentDefinition, 'debugInfo');
+};
+
 export const readAngularNodeSource = (
   componentValue: unknown,
 ): TreeNodeSource | undefined => {
   for (const metadataTarget of toSourceMetadataTargets(componentValue)) {
-    const normalizedSource = normalizeAngularTreeNodeSource(
+    const normalizedSource = [
       readObjectValue(
         metadataTarget,
         ANGULAR_COMPONENT_SOURCE_METADATA_PROPERTY,
       ),
-    );
+      getAngularDebugInfoMetadata(metadataTarget),
+    ]
+      .map((candidate) => normalizeAngularTreeNodeSource(candidate))
+      .find((candidate) => candidate !== undefined);
 
     if (normalizedSource !== undefined) {
       return normalizedSource;

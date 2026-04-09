@@ -1,0 +1,44 @@
+{
+  "name": "angular-component-inspector-example-consumer",
+  "private": true,
+  "type": "module",
+  "description": "Official Angular example consumer for the public Itera component inspector SDK.",
+  "scripts": {
+    "build": "ng build",
+    "build:smoke": "ng build --configuration development",
+    "dev": "ng serve --host 127.0.0.1 --port 4175",
+    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json",
+    "test": "vitest run",
+    "test:angular": "vitest run src/angularExampleConsumer.spec.ts src/angularBuilderSmoke.spec.ts",
+    "test:watch": "vitest watch",
+    "lint": "eslint . --fix",
+    "lint:ci": "eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@angular/common": "21.2.8",
+    "@angular/compiler": "21.2.8",
+    "@angular/core": "21.2.8",
+    "@angular/platform-browser": "21.2.8",
+    "@iteraai/angular-component-inspector": "0.0.0",
+    "@iteraai/inspector-protocol": "0.1.0",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.8.0",
+    "zone.js": "~0.15.1"
+  },
+  "devDependencies": {
+    "@angular/build": "21.2.7",
+    "@angular/cli": "21.2.7",
+    "@angular/compiler-cli": "21.2.8",
+    "@eslint/js": "^9.19.0",
+    "@stylistic/eslint-plugin-ts": "^4.2.0",
+    "@types/node": "^22.13.1",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-unicorn": "^58.0.0",
+    "globals": "^15.14.0",
+    "jsdom": "^26.0.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.23.0",
+    "vitest": "4.0.8"
+  }
+}

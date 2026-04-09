@@ -55,6 +55,8 @@ jobs:
             command: npm run test
           - name: example-smoke-react
             command: npm run test:examples:react
+          - name: example-smoke-angular
+            command: npm run test:examples:angular
           - name: example-smoke-vue
             command: npm run test:examples:vue
           - name: build

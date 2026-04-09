@@ -1356,6 +1356,9 @@ describe('iterationInspector runtime', () => {
       'elementFromPoint',
     );
     delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+    delete window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__;
+    delete window.__ITERA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
+    delete window.__ARA_EMBEDDED_INSPECTOR_SELECTION__;
     delete window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
   });
 
@@ -1579,6 +1582,50 @@ describe('iterationInspector runtime', () => {
     const selection = buildIterationElementSelection(button, window, document);
 
     expect(getReactComponentPathForElement).toHaveBeenCalledWith(button);
+    expect(selection.element.componentPath).toEqual([
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
+    expect(selection.element.reactComponentPath).toEqual([
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
+  });
+
+  test('attaches React component ancestry when the embedded inspector bridge exposes the neutral selection API alias', () => {
+    document.body.innerHTML = `
+      <main>
+        <button id="save-button">Save</button>
+      </main>
+    `;
+    const button = document.getElementById('save-button');
+
+    expect(button).not.toBeNull();
+    assert(button instanceof HTMLButtonElement);
+
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+      top: 24,
+      left: 48,
+      width: 120,
+      height: 40,
+      right: 168,
+      bottom: 64,
+      x: 48,
+      y: 24,
+      toJSON: () => ({}),
+    });
+
+    const getComponentPathForElement = vi.fn(() => [
+      'AppShell',
+      'ForwardRef(ToolbarButton)',
+    ]);
+    window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__ = {
+      getComponentPathForElement,
+    };
+
+    const selection = buildIterationElementSelection(button, window, document);
+
+    expect(getComponentPathForElement).toHaveBeenCalledWith(button);
     expect(selection.element.componentPath).toEqual([
       'AppShell',
       'ForwardRef(ToolbarButton)',

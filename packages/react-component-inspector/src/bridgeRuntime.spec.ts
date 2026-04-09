@@ -1605,12 +1605,14 @@ const embeddedSelectionApiResolved = (
   context: BridgeContext,
 ): BridgeContext => {
   const buttonElement = document.createElement('button');
-  const selectionApi = window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
+  const selectionApi = window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__;
+  const legacySelectionApi =
+    window.__ITERA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
 
   context.resolvedSelectionPath =
     selectionApi?.getComponentPathForElement?.(buttonElement);
   context.resolvedLegacySelectionPath =
-    selectionApi?.getReactComponentPathForElement?.(buttonElement);
+    legacySelectionApi?.getReactComponentPathForElement?.(buttonElement);
 
   return context;
 };
@@ -1618,6 +1620,12 @@ const embeddedSelectionApiResolved = (
 const expectEmbeddedSelectionApiToDelegateToTreeAdapter = (
   context: BridgeContext,
 ) => {
+  expect(window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__).toBe(
+    window.__ITERA_EMBEDDED_REACT_INSPECTOR_SELECTION__,
+  );
+  expect(window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__).toBe(
+    window.__ARA_EMBEDDED_INSPECTOR_SELECTION__,
+  );
   expect(context.resolvedSelectionPath).toEqual([
     'AppShell',
     'ForwardRef(ToolbarButton)',
@@ -1636,6 +1644,9 @@ const expectEmbeddedSelectionApiToDelegateToTreeAdapter = (
 
 const expectEmbeddedSelectionApiToBeCleared = (context: BridgeContext) => {
   expect(context).toBeDefined();
+  expect(window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__).toBeUndefined();
+  expect(window.__ITERA_EMBEDDED_REACT_INSPECTOR_SELECTION__).toBeUndefined();
+  expect(window.__ARA_EMBEDDED_INSPECTOR_SELECTION__).toBeUndefined();
   expect(window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__).toBeUndefined();
 
   return context;

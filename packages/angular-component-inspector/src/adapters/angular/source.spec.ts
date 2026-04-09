@@ -15,6 +15,23 @@ const createAngularComponentDouble = (
   });
 };
 
+const createAngularComponentWithDebugInfoDouble = (
+  displayName: string,
+  debugInfo?: Record<string, unknown>,
+) => {
+  return Object.defineProperty({}, 'constructor', {
+    configurable: true,
+    value: {
+      name: displayName,
+      ...(debugInfo !== undefined && {
+        ɵcmp: {
+          debugInfo,
+        },
+      }),
+    },
+  });
+};
+
 test('reads normalized source metadata from the Angular component type', () => {
   expect(
     readAngularNodeSource(
@@ -54,5 +71,19 @@ test('drops an invalid optional source column while preserving file and line', (
   ).toEqual({
     file: 'src/app/header.component.ts',
     line: 8,
+  });
+});
+
+test('reads Angular debug info metadata from the component definition', () => {
+  expect(
+    readAngularNodeSource(
+      createAngularComponentWithDebugInfoDouble('ProductCardComponent', {
+        filePath: 'src/app/product-card/product-card.component.ts',
+        lineNumber: 12,
+      }),
+    ),
+  ).toEqual({
+    file: 'src/app/product-card/product-card.component.ts',
+    line: 12,
   });
 });

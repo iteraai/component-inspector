@@ -49,9 +49,20 @@ const expectSourceMetadataMarker = (
   );
 
   expect(metadataContextMatch?.[0]).toBeDefined();
-  expect(metadataContextMatch?.[0]).toContain('__iteraSource');
-  expect(metadataContextMatch?.[0]).toMatch(/["']?line["']?\s*:\s*\d+/);
-  expect(metadataContextMatch?.[0]).toMatch(/["']?column["']?\s*:\s*\d+/);
+
+  const metadataContext = metadataContextMatch?.[0] ?? '';
+  const hasInspectorSourceMetadata =
+    metadataContext.includes('__iteraSource') &&
+    /["']?line["']?\s*:\s*\d+/.test(metadataContext) &&
+    /["']?column["']?\s*:\s*\d+/.test(metadataContext);
+  const hasAngularDebugInfoMetadata =
+    metadataContext.includes('filePath') &&
+    /["']?filePath["']?\s*:\s*["'][^"']+["']/.test(metadataContext) &&
+    /["']?lineNumber["']?\s*:\s*\d+/.test(metadataContext);
+
+  expect(
+    hasInspectorSourceMetadata || hasAngularDebugInfoMetadata,
+  ).toBe(true);
 };
 
 const angularBuildSmoke =
@@ -73,7 +84,6 @@ angularBuildSmoke(
       'src/app/publishButton.component.ts',
     );
 
-    expect(emittedBundle).toContain('__iteraSource');
     expect(emittedBundle).toContain('src/app/publishButton.component.ts');
     expect(emittedBundle).toContain('src/app/app.component.ts');
     expectSourceMetadataMarker(

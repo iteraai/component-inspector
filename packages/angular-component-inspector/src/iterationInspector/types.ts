@@ -310,6 +310,24 @@ const isIterationPreviewTargetEdit = (
   );
 };
 
+const isIterationPreviewEditError = (
+  value: unknown,
+): value is IterationPreviewEditError => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.code === 'string' &&
+    iterationPreviewEditErrorCodes.includes(
+      value.code as IterationPreviewEditErrorCode,
+    ) &&
+    typeof value.message === 'string' &&
+    isNonNegativeInteger(value.targetIndex) &&
+    (value.fieldId === undefined || typeof value.fieldId === 'string')
+  );
+};
+
 export const isIterationInspectorParentMessage = (
   value: unknown,
 ): value is IterationInspectorParentMessage => {
@@ -389,7 +407,10 @@ export const isIterationInspectorRuntimeMessage = (
     case 'preview_edits_status': {
       return (
         isNonNegativeInteger(value.revision) &&
-        isNonNegativeInteger(value.appliedTargetCount)
+        isNonNegativeInteger(value.appliedTargetCount) &&
+        (value.errors === undefined ||
+          (Array.isArray(value.errors) &&
+            value.errors.every((error) => isIterationPreviewEditError(error))))
       );
     }
 

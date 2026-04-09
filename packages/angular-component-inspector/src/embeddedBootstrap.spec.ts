@@ -4,6 +4,7 @@ import {
   initDevEmbeddedInspectorBridge,
 } from './embeddedBootstrap';
 import { destroyInspectorBridge } from './bridgeRuntime';
+import type { AngularInspectorRuntimeConfig } from './adapters/base';
 
 type SourceDouble = {
   postMessage: ReturnType<typeof vi.fn>;
@@ -72,6 +73,57 @@ test('dev bootstrap helper uses the default host-origin path safely', () => {
   expect(readyCall?.[0]).toMatchObject({
     type: 'READY',
   });
+
+  bootstrap.destroy();
+});
+
+test('dev bootstrap forwards caller runtimeConfig to the adapter factory', () => {
+  const hostOrigin = 'https://app.iteradev.ai';
+  const source = createSourceDouble();
+  const runtimeConfig: AngularInspectorRuntimeConfig = {
+    adapter: 'angular-dev-mode-globals',
+    angularGlobals: {
+      getComponent: vi.fn(),
+      getDirectiveMetadata: vi.fn(),
+      getHostElement: vi.fn(),
+      getOwningComponent: vi.fn(),
+    },
+  };
+  const adapterFactory = vi.fn(() => {
+    return {
+      adapterTarget: 'noop' as const,
+      isAngularDevModeGlobalsAvailable: false,
+      getTreeSnapshot: () => ({
+        nodes: [],
+        rootIds: [],
+      }),
+      getNodeProps: () => undefined,
+      getDomElement: () => null,
+    };
+  });
+  const bootstrap = initDevEmbeddedInspectorBridge({
+    adapterFactory,
+    runtimeConfig,
+  });
+
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: hostOrigin,
+      source: source as unknown as MessageEventSource,
+      data: buildMessage('HELLO', {
+        capabilities: ['host-tree'],
+      }),
+    }),
+  );
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: hostOrigin,
+      source: source as unknown as MessageEventSource,
+      data: buildMessage('REQUEST_TREE', {}),
+    }),
+  );
+
+  expect(adapterFactory).toHaveBeenCalledWith(runtimeConfig);
 
   bootstrap.destroy();
 });

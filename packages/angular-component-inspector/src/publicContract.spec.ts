@@ -259,3 +259,15 @@ test('iteration inspector runtime guards accept preview edit capability and stat
     ].map((message) => isIterationInspectorRuntimeMessage(message)),
   ).toStrictEqual([true, true, true, true, true, true, true]);
 });
+
+test('iteration inspector runtime guard rejects malformed preview edit error payloads', () => {
+  expect(
+    isIterationInspectorRuntimeMessage({
+      channel: ITERATION_INSPECTOR_CHANNEL,
+      kind: 'preview_edits_status',
+      revision: 2,
+      appliedTargetCount: 1,
+      errors: [{}],
+    }),
+  ).toBe(false);
+});

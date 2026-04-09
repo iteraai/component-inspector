@@ -70,6 +70,15 @@ const DEFAULT_DEV_ALLOWED_HOST_ORIGINS = ['https://app.iteradev.ai'] as const;
 const DEFAULT_DEV_EMBEDDED_BRIDGE_ENABLED = true;
 const DEFAULT_DEV_EMBEDDED_BRIDGE_KILL_SWITCH_ACTIVE = false;
 
+const resolveDevBootstrapRuntimeConfig = (
+  runtimeConfig: InitDevEmbeddedInspectorBridgeOptions['runtimeConfig'],
+): NonNullable<BootstrapEmbeddedInspectorBridgeOptions['runtimeConfig']> => {
+  return {
+    ...runtimeConfig,
+    adapter: runtimeConfig?.adapter ?? 'auto',
+  };
+};
+
 const toResolvedHostOrigins = (
   hostOrigins: BootstrapEmbeddedInspectorBridgeOptions['hostOrigins'],
   defaultHostOrigins: readonly string[],
@@ -158,8 +167,6 @@ export const initDevEmbeddedInspectorBridge = (
     runtimeTelemetry: options.runtimeTelemetry,
     mode: 'development',
     capabilities: [...DEFAULT_BRIDGE_CAPABILITIES],
-    runtimeConfig: {
-      adapter: 'auto',
-    },
+    runtimeConfig: resolveDevBootstrapRuntimeConfig(options.runtimeConfig),
   });
 };

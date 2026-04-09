@@ -11,6 +11,11 @@ declare module '@angular-devkit/architect' {
 
   export type BuilderContext = {
     workspaceRoot: string;
+    target?: {
+      project?: string;
+      target?: string;
+      configuration?: string;
+    };
     logger: {
       info: (message: string) => void;
       warn: (message: string) => void;
@@ -20,6 +25,15 @@ declare module '@angular-devkit/architect' {
       builderName: string,
       options: Record<string, unknown>,
     ) => Promise<BuilderRun>;
+    getBuilderNameForTarget: (target: Record<string, unknown>) => Promise<string>;
+    getTargetOptions: (
+      target: Record<string, unknown>,
+    ) => Promise<Record<string, unknown>>;
+    validateOptions: (
+      options: Record<string, unknown>,
+      builderName: string,
+    ) => Promise<Record<string, unknown>>;
+    addTeardown: (teardown: () => Promise<void> | void) => void;
   };
 
   export type BuilderHandlerFn<
@@ -27,7 +41,10 @@ declare module '@angular-devkit/architect' {
   > = (
     options: TOptions,
     context: BuilderContext,
-  ) => Promise<BuilderOutput> | BuilderOutput;
+  ) =>
+    | Promise<BuilderOutput>
+    | BuilderOutput
+    | AsyncIterable<BuilderOutput>;
 
   export type Builder<_TOptions extends object = Record<string, unknown>> =
     unknown;

@@ -9,11 +9,17 @@ type AngularComponentRegistration = {
   ownedElements?: readonly Element[];
 };
 
-const createAngularComponentDouble = (displayName: string) => {
+const createAngularComponentDouble = (
+  displayName: string,
+  sourceMetadata?: Record<string, unknown>,
+) => {
   return Object.defineProperty({}, 'constructor', {
     configurable: true,
     value: {
       name: displayName,
+      ...(sourceMetadata !== undefined && {
+        __iteraSource: sourceMetadata,
+      }),
     },
   });
 };
@@ -56,6 +62,38 @@ const createAngularGlobalsDouble = (
 afterEach(() => {
   document.body.innerHTML = '';
   vi.restoreAllMocks();
+});
+
+test('includes normalized source metadata on Angular tree nodes when the builder has instrumented the component type', () => {
+  const appShellElement = document.createElement('app-shell');
+  const appShellComponent = createAngularComponentDouble('AppShell', {
+    file: 'src/app/app-shell.component.ts',
+    line: 9,
+    column: 15,
+  });
+  const angularGlobals = createAngularGlobalsDouble([
+    {
+      component: appShellComponent,
+      hostElement: appShellElement,
+      owner: null,
+    },
+  ]);
+  const adapter = createAngularDevModeGlobalsAdapter({
+    angularGlobals,
+  });
+
+  document.body.append(appShellElement);
+
+  expect(adapter.getTreeSnapshot().nodes).toEqual([
+    expect.objectContaining({
+      displayName: 'AppShell',
+      source: {
+        file: 'src/app/app-shell.component.ts',
+        line: 9,
+        column: 15,
+      },
+    }),
+  ]);
 });
 
 test('resolves projected-content ancestry from Angular ownership instead of DOM ancestry', () => {

@@ -15,7 +15,9 @@ type PackageExportTarget = {
 };
 
 type PackageJsonShape = {
+  description: string;
   builders: string;
+  peerDependencies: Record<string, string>;
   exports: Record<string, PackageExportTarget>;
 };
 
@@ -124,14 +126,24 @@ test('package exports and runtime entrypoints stay stable', () => {
       import: './dist/iterationInspector.js',
     },
   });
+  expect(readPackageJson().description).toBe(
+    'Browser bridge, iteration runtime, and Angular CLI source metadata builders for the Itera Angular component inspector SDK.',
+  );
   expect(readPackageJson().builders).toBe('./builders.json');
-  expect(readBuildersManifest().builders.application).toMatchObject({
+  expect(readPackageJson().peerDependencies['@angular/core']).toBe(
+    '^18.0.0 || ^19.0.0 || ^20.0.0 || ^21.0.0',
+  );
+  expect(readBuildersManifest().builders.application).toStrictEqual({
     implementation: './dist/builders/application.js',
     schema: './schemas/application.schema.json',
+    description:
+      'Angular application builder with dev-only Itera component source metadata injection for supported Angular builds.',
   });
-  expect(readBuildersManifest().builders['dev-server']).toMatchObject({
+  expect(readBuildersManifest().builders['dev-server']).toStrictEqual({
     implementation: './dist/builders/devServer.js',
     schema: './schemas/dev-server.schema.json',
+    description:
+      'Angular dev-server builder with dev-only Itera component source metadata injection for supported Angular builds.',
   });
   expect(getRuntimeExportKeys(indexModule)).toStrictEqual([
     'ITERATION_INSPECTOR_CHANNEL',

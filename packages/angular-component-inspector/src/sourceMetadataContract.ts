@@ -1,0 +1,1 @@
+export const ANGULAR_COMPONENT_SOURCE_METADATA_PROPERTY = '__iteraSource';

@@ -1,4 +1,5 @@
 import type { AngularInspectorAdapterContract } from '../base/types';
+import { createAngularDevModeGlobalsAdapter } from './angularAdapter';
 
 export type AngularDevModeGlobalsApi = {
   getComponent?: (target: Element) => object | null | undefined;
@@ -51,11 +52,19 @@ export const hasRequiredAngularDevModeGlobals = (
 export const createAngularDevModeGlobalsInspectorAdapter = (options: {
   angularGlobals: AngularDevModeGlobalsApi | null;
 }): AngularInspectorAdapterContract => {
+  if (hasRequiredAngularDevModeGlobals(options.angularGlobals)) {
+    return {
+      adapterTarget: 'angular-dev-mode-globals',
+      isAngularDevModeGlobalsAvailable: true,
+      ...createAngularDevModeGlobalsAdapter({
+        angularGlobals: options.angularGlobals,
+      }),
+    };
+  }
+
   return {
     adapterTarget: 'angular-dev-mode-globals',
-    isAngularDevModeGlobalsAvailable: hasRequiredAngularDevModeGlobals(
-      options.angularGlobals,
-    ),
+    isAngularDevModeGlobalsAvailable: false,
     getTreeSnapshot: () => ({
       nodes: [],
       rootIds: [],

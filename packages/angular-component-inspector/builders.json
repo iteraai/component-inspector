@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/angular-builders",
+  "builders": {
+    "application": {
+      "implementation": "./dist/builders/application.js",
+      "schema": "./schemas/application.schema.json",
+      "description": "Pass-through Angular application builder scaffold for Itera component inspector source metadata integration."
+    },
+    "dev-server": {
+      "implementation": "./dist/builders/devServer.js",
+      "schema": "./schemas/dev-server.schema.json",
+      "description": "Pass-through Angular dev-server builder scaffold for Itera component inspector source metadata integration."
+    }
+  }
+}

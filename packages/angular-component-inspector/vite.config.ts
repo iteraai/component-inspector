@@ -44,8 +44,7 @@ export default defineConfig({
     rollupOptions: {
       external: (id) => {
         return (
-          id === 'node:module' ||
-          id === 'node:path' ||
+          id.startsWith('node:') ||
           id === '@angular-devkit/architect' ||
           id === '@iteraai/inspector-protocol' ||
           id.startsWith('@iteraai/inspector-protocol/')

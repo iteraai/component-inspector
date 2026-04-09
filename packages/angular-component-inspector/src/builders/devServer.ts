@@ -1,12 +1,10 @@
 import { createBuilder } from '@angular-devkit/architect';
-import {
-  createPassThroughAngularBuilderHandler,
-  type AngularInspectorBuilderOptions,
-} from './delegateBuilder';
+import type { AngularInspectorBuilderOptions } from './delegateBuilder';
+import { executeAngularDevServerBuilder } from './programmaticBuilder';
 
 export type AngularInspectorDevServerBuilderOptions =
   AngularInspectorBuilderOptions;
 
 export default createBuilder<AngularInspectorDevServerBuilderOptions>(
-  createPassThroughAngularBuilderHandler('dev-server'),
+  executeAngularDevServerBuilder,
 );

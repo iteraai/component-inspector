@@ -9,10 +9,11 @@
     },
     "inspectorSourceMetadata": {
       "type": "object",
-      "description": "Reserved source-metadata scaffold options for future Angular instrumentation.",
+      "description": "Controls Itera Angular component source metadata injection for supported development builds.",
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Enables dev-only Angular component source metadata injection. Defaults to true for development-like builds."
         }
       },
       "additionalProperties": false

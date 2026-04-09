@@ -4,6 +4,7 @@ import type {
   AngularDiscoveryRecord,
   AngularDiscoveryResult,
 } from './discovery';
+import { readAngularNodeSource } from './source';
 
 type AngularTreeMappingOptions = Readonly<{
   discoveryResult: AngularDiscoveryResult;
@@ -114,6 +115,7 @@ const toNodes = (
   childRecordKeysByParentKey: ReadonlyMap<string, string[]>,
 ) => {
   return includedRecords.map((record): TreeNode => {
+    const source = readAngularNodeSource(record.component);
     const nodeId = includedNodeIdByRecordKey.get(record.key) as string;
     const parentRecordKey = parentRecordKeyByRecordKey.get(record.key);
     const parentId =
@@ -132,6 +134,9 @@ const toNodes = (
       displayName: record.displayName,
       parentId,
       childrenIds,
+      ...(source !== undefined && {
+        source,
+      }),
       ...(record.tags.length > 0 && {
         tags: [...record.tags],
       }),

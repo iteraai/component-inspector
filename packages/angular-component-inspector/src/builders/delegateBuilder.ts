@@ -91,6 +91,8 @@ const stripInspectorBuilderOptions = (
   };
 };
 
+export { stripInspectorBuilderOptions };
+
 export const resolveDefaultDelegateBuilder = (
   builderKind: AngularInspectorBuilderKind,
   workspaceRoot: string,

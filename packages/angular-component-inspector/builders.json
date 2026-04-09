@@ -4,12 +4,12 @@
     "application": {
       "implementation": "./dist/builders/application.js",
       "schema": "./schemas/application.schema.json",
-      "description": "Pass-through Angular application builder scaffold for Itera component inspector source metadata integration."
+      "description": "Angular application builder with dev-only Itera component source metadata injection for supported Angular builds."
     },
     "dev-server": {
       "implementation": "./dist/builders/devServer.js",
       "schema": "./schemas/dev-server.schema.json",
-      "description": "Pass-through Angular dev-server builder scaffold for Itera component inspector source metadata integration."
+      "description": "Angular dev-server builder with dev-only Itera component source metadata injection for supported Angular builds."
     }
   }
 }

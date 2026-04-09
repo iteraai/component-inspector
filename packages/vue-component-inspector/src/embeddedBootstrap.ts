@@ -1,5 +1,5 @@
 import type { App } from 'vue';
-import { initEmbeddedRuntimeTelemetry } from '../../react-component-inspector/src/embeddedRuntimeTelemetry';
+import { initEmbeddedRuntimeTelemetry } from '../../inspector-runtime-core/src/embeddedRuntimeTelemetry';
 import {
   initInspectorBridge,
   type InitInspectorBridgeOptions,

@@ -2,7 +2,7 @@ import {
   bootIterationInspectorRuntime as bootSharedIterationInspectorRuntime,
   buildIterationElementSelection as buildSharedIterationElementSelection,
   createIterationInspectorRuntime as createSharedIterationInspectorRuntime,
-} from '../../../react-component-inspector/src/iterationInspector/runtime';
+} from '../../../inspector-runtime-core/src/iterationInspector/runtime';
 import type {
   IterationElementSelection,
   IterationInspectorRuntime,

@@ -6,7 +6,7 @@ import type {
 import {
   destroyInspectorBridge as destroySharedInspectorBridge,
   initInspectorBridge as initSharedInspectorBridge,
-} from '../../react-component-inspector/src/bridgeRuntime';
+} from '../../inspector-runtime-core/src/bridgeRuntime';
 import {
   createVueInspectorAdapter,
   type VueInspectorAdapterContract,
@@ -171,19 +171,17 @@ const toSharedInitOptions = (
     hostOrigins: options.hostOrigins,
     enabled: options.enabled,
     killSwitchActive: options.killSwitchActive,
+    killSwitchWarningMessage:
+      '[component-inspector] Embedded inspector bridge disabled by kill switch.',
     mode: options.mode,
-    runtimeConfig: undefined,
+    runtimeConfig: options.runtimeConfig,
     capabilities: options.capabilities,
-    treeAdapter:
-      options.treeAdapter as SharedInitInspectorBridgeOptions['treeAdapter'],
+    treeAdapter: options.treeAdapter,
     adapterFactory:
       resolvedAdapterFactory as SharedInitInspectorBridgeOptions['adapterFactory'],
-    handlers:
-      options.handlers as SharedInitInspectorBridgeOptions['handlers'],
-    security:
-      options.security as SharedInitInspectorBridgeOptions['security'],
-    telemetry:
-      options.telemetry as SharedInitInspectorBridgeOptions['telemetry'],
+    handlers: options.handlers,
+    security: options.security,
+    telemetry: options.telemetry,
   };
 };
 

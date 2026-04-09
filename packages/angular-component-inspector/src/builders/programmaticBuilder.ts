@@ -99,6 +99,36 @@ const isProgrammaticBuilderCandidate = (
   );
 };
 
+const parseBuildTargetString = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const [project, target, configuration] = value
+    .split(':')
+    .map((segment) => segment.trim());
+
+  if (
+    project === undefined ||
+    project.length === 0 ||
+    target === undefined ||
+    target.length === 0
+  ) {
+    return undefined;
+  }
+
+  return configuration === undefined || configuration.length === 0
+    ? {
+        project,
+        target,
+      }
+    : {
+        project,
+        target,
+        configuration,
+      };
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;
 };
@@ -179,6 +209,39 @@ const createAngularDevServerValidationContext = (
   };
 };
 
+const resolveInspectorApplicationDelegateBuilderForServeTarget = async (
+  delegateOptions: Record<string, unknown>,
+  context: BuilderContext,
+  resolveDelegateBuilder: ResolveDelegateBuilder,
+) => {
+  const defaultApplicationBuilder = resolveDelegateBuilder(
+    'application',
+    context.workspaceRoot,
+  );
+  const buildTarget = parseBuildTargetString(delegateOptions.buildTarget);
+
+  if (buildTarget === undefined) {
+    return defaultApplicationBuilder;
+  }
+
+  try {
+    const buildTargetBuilder = await context.getBuilderNameForTarget(buildTarget);
+
+    if (buildTargetBuilder !== angularInspectorApplicationBuilderName) {
+      return defaultApplicationBuilder;
+    }
+
+    const buildTargetOptions = await context.getTargetOptions(buildTarget);
+    const { delegateBuilder } = stripInspectorBuilderOptions(
+      buildTargetOptions as AngularInspectorBuilderOptions,
+    );
+
+    return delegateBuilder ?? defaultApplicationBuilder;
+  } catch {
+    return defaultApplicationBuilder;
+  }
+};
+
 const logSourceMetadataMode = (
   builderKind: 'application' | 'dev-server',
   context: BuilderContext,
@@ -251,10 +314,20 @@ export const executeAngularDevServerBuilder = async function* (
   const { delegateBuilder, delegateOptions } = stripInspectorBuilderOptions(options);
   const resolvedDelegateBuilder =
     delegateBuilder ?? resolveDelegateBuilder('dev-server', context.workspaceRoot);
-  const delegatedApplicationBuilder = resolveDelegateBuilder(
-    'application',
-    context.workspaceRoot,
-  );
+  const delegatedApplicationBuilder =
+    await resolveInspectorApplicationDelegateBuilderForServeTarget(
+      delegateOptions,
+      context,
+      resolveDelegateBuilder,
+    );
+
+  if (
+    delegatedApplicationBuilder !== undefined &&
+    !isProgrammaticBuilderCandidate('application', delegatedApplicationBuilder)
+  ) {
+    yield await runDelegatedAngularBuilder('dev-server', options, context);
+    return;
+  }
 
   if (
     !isProgrammaticBuilderCandidate('dev-server', resolvedDelegateBuilder) ||

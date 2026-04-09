@@ -190,3 +190,76 @@ test('dev-server builder validates Angular application targets against the deleg
     },
   );
 });
+
+test('dev-server builder honors an application target delegateBuilder override when serving an inspector build target', async () => {
+  const executeDevServerBuilder = vi.fn(async function* (_options, context) {
+    expect(
+      await context.getBuilderNameForTarget({
+        project: 'app',
+        target: 'build',
+      }),
+    ).toBe('@angular-devkit/build-angular:application');
+    await context.validateOptions(
+      {
+        outputPath: 'dist/app',
+        inspectorSourceMetadata: {
+          enabled: true,
+        },
+      },
+      '@angular-devkit/build-angular:application',
+    );
+
+    yield {
+      success: true,
+    };
+  });
+  const validateOptions = vi.fn(async (options) => options);
+  const context = createBuilderContext({
+    target: {
+      configuration: 'development',
+    },
+    getBuilderNameForTarget: vi.fn(async () => {
+      return '@iteraai/angular-component-inspector:application';
+    }),
+    getTargetOptions: vi.fn(async () => {
+      return {
+        delegateBuilder: '@angular-devkit/build-angular:application',
+        outputPath: 'dist/app',
+        inspectorSourceMetadata: {
+          enabled: true,
+        },
+      };
+    }),
+    validateOptions,
+  });
+
+  const outputs = await collectBuilderOutputs(
+    executeAngularDevServerBuilder(
+      {
+        delegateBuilder: '@angular/build:dev-server',
+        buildTarget: 'app:build',
+      },
+      context,
+      async () => ({
+        executeDevServerBuilder,
+      }),
+      ((builderKind: 'application' | 'dev-server') => {
+        return builderKind === 'application'
+          ? '@angular/build:application'
+          : '@angular/build:dev-server';
+      }) as never,
+    ),
+  );
+
+  expect(outputs).toEqual([
+    {
+      success: true,
+    },
+  ]);
+  expect(validateOptions).toHaveBeenCalledWith(
+    {
+      outputPath: 'dist/app',
+    },
+    '@angular-devkit/build-angular:application',
+  );
+});

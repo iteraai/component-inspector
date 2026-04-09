@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readBuiltAngularBundleSources } from './angularExampleConsumerTestUtils';
 
 const workspaceRoot = path.resolve(import.meta.dirname, '..');
+const SOURCE_METADATA_CONTEXT_RADIUS = 400;
 
 const run = (command: string, args: string[]) => {
   const result = spawnSync(command, args, {
@@ -19,6 +20,40 @@ const run = (command: string, args: string[]) => {
   }
 };
 
+const escapeRegExp = (value: string) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+const getBundleSourceContaining = (
+  bundleSources: readonly string[],
+  filePath: string,
+) => {
+  const matchingBundleSource = bundleSources.find((source) => {
+    return source.includes(filePath);
+  });
+
+  expect(matchingBundleSource).toBeDefined();
+
+  return matchingBundleSource as string;
+};
+
+const expectSourceMetadataMarker = (
+  bundleSource: string,
+  filePath: string,
+) => {
+  const metadataContextMatch = bundleSource.match(
+    new RegExp(
+      `.{0,${SOURCE_METADATA_CONTEXT_RADIUS}}${escapeRegExp(filePath)}.{0,${SOURCE_METADATA_CONTEXT_RADIUS}}`,
+      's',
+    ),
+  );
+
+  expect(metadataContextMatch?.[0]).toBeDefined();
+  expect(metadataContextMatch?.[0]).toContain('__iteraSource');
+  expect(metadataContextMatch?.[0]).toMatch(/["']?line["']?\s*:\s*\d+/);
+  expect(metadataContextMatch?.[0]).toMatch(/["']?column["']?\s*:\s*\d+/);
+};
+
 const angularBuildSmoke =
   process.platform === 'darwin' ? test.skip : test;
 
@@ -29,12 +64,25 @@ angularBuildSmoke(
 
     const bundleSources = readBuiltAngularBundleSources(workspaceRoot);
     const emittedBundle = bundleSources.join('\n');
+    const appComponentBundleSource = getBundleSourceContaining(
+      bundleSources,
+      'src/app/app.component.ts',
+    );
+    const publishButtonBundleSource = getBundleSourceContaining(
+      bundleSources,
+      'src/app/publishButton.component.ts',
+    );
 
     expect(emittedBundle).toContain('__iteraSource');
     expect(emittedBundle).toContain('src/app/publishButton.component.ts');
     expect(emittedBundle).toContain('src/app/app.component.ts');
-    expect(emittedBundle).toMatch(
-      /__iteraSource".*?line:\s*\d+.*?column:\s*\d+/s,
+    expectSourceMetadataMarker(
+      appComponentBundleSource,
+      'src/app/app.component.ts',
+    );
+    expectSourceMetadataMarker(
+      publishButtonBundleSource,
+      'src/app/publishButton.component.ts',
     );
   },
   120_000,

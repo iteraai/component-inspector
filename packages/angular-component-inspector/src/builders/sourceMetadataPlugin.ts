@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 import type * as TypeScriptCompiler from 'typescript';
 import {
   isSupportedAngularSourceMetadataFile,
@@ -41,15 +40,13 @@ type BuilderLogger = Readonly<{
   warn?: (message: string) => void;
 }>;
 
-const ANGULAR_SOURCE_FILE_FILTER = /\.[cm]?tsx?$/u;
+const ANGULAR_SOURCE_FILE_FILTER = /\.[cm]?tsx?$/;
 
 const loadWorkspaceTypeScript = async (workspaceRoot: string) => {
   const workspaceRequire = createRequire(path.join(workspaceRoot, 'package.json'));
   const resolvedModulePath = workspaceRequire.resolve('typescript');
 
-  return (await import(
-    pathToFileURL(resolvedModulePath).href
-  )) as TypeScriptModule;
+  return workspaceRequire(resolvedModulePath) as TypeScriptModule;
 };
 
 const toLoader = (filePath: string): EsbuildLoader => {

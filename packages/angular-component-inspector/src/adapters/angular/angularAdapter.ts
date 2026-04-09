@@ -9,7 +9,7 @@ import { mapAngularDiscoveryToTreeSnapshot } from './treeMapping';
 
 type AngularDevModeGlobalsAdapter = Pick<
   AngularInspectorAdapterContract,
-  'getTreeSnapshot' | 'getNodeProps' | 'getDomElement'
+  'getTreeSnapshot' | 'getNodeProps' | 'getDomElement' | 'getComponentPathForElement'
 >;
 
 export const createAngularDevModeGlobalsAdapter = (options: {
@@ -80,6 +80,17 @@ export const createAngularDevModeGlobalsAdapter = (options: {
         });
       } catch {
         return null;
+      }
+    },
+    getComponentPathForElement: (element) => {
+      try {
+        refreshSnapshotState();
+        return nodeLookup.resolveClosestComponentPathForElement(
+          element,
+          options.angularGlobals,
+        );
+      } catch {
+        return undefined;
       }
     },
   };

@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/angular-component-inspector",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "description": "Browser bridge, iteration runtime, and Angular CLI source metadata builders for the Itera Angular component inspector SDK.",

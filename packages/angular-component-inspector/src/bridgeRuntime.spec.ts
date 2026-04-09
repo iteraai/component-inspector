@@ -2,6 +2,7 @@ import { buildMessage } from '@iteraai/inspector-protocol';
 import { inspectorHighlightOverlaySelector } from '../../inspector-runtime-core/src/highlighter';
 import { MAX_TREE_SNAPSHOT_NODE_COUNT } from '../../inspector-runtime-core/src/treeAdapter';
 import { destroyInspectorBridge, initInspectorBridge } from './bridgeRuntime';
+import { buildIterationElementSelection } from './iterationInspector';
 import type { AngularDevModeGlobalsApi } from './adapters/angular';
 
 type SourceDouble = {
@@ -13,6 +14,7 @@ type AngularComponentRegistration = {
   hostElement: Element;
   owner?: object | null;
   componentElements?: readonly Element[];
+  ownedElements?: readonly Element[];
   directiveMetadata?: Record<string, unknown> | null;
 };
 
@@ -50,6 +52,10 @@ const createAngularGlobalsDouble = (
     componentByElement.set(registration.hostElement, registration.component);
     registration.componentElements?.forEach((element) => {
       componentByElement.set(element, registration.component);
+      ownerByTarget.set(element, registration.component);
+    });
+    registration.ownedElements?.forEach((element) => {
+      ownerByTarget.set(element, registration.component);
     });
     hostElementByComponent.set(registration.component, registration.hostElement);
     ownerByTarget.set(registration.component, registration.owner ?? null);
@@ -230,6 +236,55 @@ test('bridge initialization stays safe and returns an empty snapshot when window
       nodes: [],
       rootIds: [],
     },
+  });
+});
+
+test('bridge selection API populates componentPath and compatibility reactComponentPath for Angular selections', () => {
+  const hostOrigin = 'https://app.iteradev.ai';
+  const appShellElement = document.createElement('app-shell');
+  const overlayLauncherElement = document.createElement('overlay-launcher');
+  const overlayPanelElement = document.createElement('overlay-panel');
+  const overlayActionElement = document.createElement('button');
+  const appShellComponent = createAngularComponentDouble('AppShell');
+  const overlayLauncherComponent =
+    createAngularComponentDouble('OverlayLauncher');
+  const overlayPanelComponent = createAngularComponentDouble('OverlayPanel');
+  const angularGlobals = createAngularGlobalsDouble([
+    {
+      component: appShellComponent,
+      hostElement: appShellElement,
+      owner: null,
+    },
+    {
+      component: overlayLauncherComponent,
+      hostElement: overlayLauncherElement,
+      owner: appShellComponent,
+    },
+    {
+      component: overlayPanelComponent,
+      hostElement: overlayPanelElement,
+      owner: overlayLauncherComponent,
+      ownedElements: [overlayActionElement],
+    },
+  ]);
+
+  overlayPanelElement.append(overlayActionElement);
+  appShellElement.append(overlayLauncherElement);
+  document.body.append(appShellElement, overlayPanelElement);
+
+  initInspectorBridge({
+    hostOrigins: [hostOrigin],
+    enabled: true,
+    capabilities: ['tree', 'props', 'highlight'],
+    runtimeConfig: {
+      adapter: 'angular-dev-mode-globals',
+      angularGlobals,
+    },
+  });
+
+  expect(buildIterationElementSelection(overlayActionElement).element).toMatchObject({
+    componentPath: ['AppShell', 'OverlayLauncher', 'OverlayPanel'],
+    reactComponentPath: ['AppShell', 'OverlayLauncher', 'OverlayPanel'],
   });
 });
 

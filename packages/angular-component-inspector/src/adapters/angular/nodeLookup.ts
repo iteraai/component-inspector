@@ -1,8 +1,12 @@
-import type { InspectorTreeSnapshot } from '../base/types';
+import type {
+  InspectorComponentPath,
+  InspectorTreeSnapshot,
+} from '../base/types';
 import type {
   AngularDiscoveryRecord,
   AngularDiscoveryResult,
 } from './discovery';
+import type { AngularDevModeGlobalsApi } from './angularGlobals';
 
 export type AngularNodeLookupPayload = Readonly<{
   nodeId: string;
@@ -22,6 +26,10 @@ export type AngularNodeLookup = Readonly<{
     snapshot: InspectorTreeSnapshot;
   }) => void;
   resolveByNodeId: (nodeId: string) => AngularNodeLookupPayload | undefined;
+  resolveClosestComponentPathForElement: (
+    element: Element,
+    angularGlobals: AngularDevModeGlobalsApi,
+  ) => InspectorComponentPath | undefined;
 }>;
 
 const toChildNodeIds = (
@@ -68,12 +76,120 @@ const toParentNodeId = (
   return parentNodeId;
 };
 
+const isInspectableObject = (value: unknown): value is object => {
+  return (
+    (typeof value === 'object' && value !== null) || typeof value === 'function'
+  );
+};
+
+const getParentElement = (element: Element): Element | null => {
+  if (element.parentElement !== null) {
+    return element.parentElement;
+  }
+
+  const parentNode = element.parentNode;
+
+  if (typeof ShadowRoot !== 'undefined' && parentNode instanceof ShadowRoot) {
+    return parentNode.host instanceof Element ? parentNode.host : null;
+  }
+
+  return parentNode instanceof Element ? parentNode : null;
+};
+
+const buildComponentPath = (
+  nodeId: string,
+  nodeById: ReadonlyMap<string, InspectorTreeSnapshot['nodes'][number]>,
+) => {
+  const componentPath: string[] = [];
+  const visitedNodeIds = new Set<string>();
+  let currentNodeId: string | null = nodeId;
+
+  while (currentNodeId !== null && !visitedNodeIds.has(currentNodeId)) {
+    visitedNodeIds.add(currentNodeId);
+
+    const currentNode = nodeById.get(currentNodeId);
+
+    if (currentNode === undefined) {
+      break;
+    }
+
+    componentPath.unshift(currentNode.displayName);
+    currentNodeId = currentNode.parentId;
+  }
+
+  return componentPath.length > 0 ? componentPath : undefined;
+};
+
+const readAngularComponent = (
+  element: Element,
+  angularGlobals: AngularDevModeGlobalsApi,
+) => {
+  let component: object | null | undefined;
+
+  try {
+    component = angularGlobals.getComponent?.(element);
+  } catch {
+    component = undefined;
+  }
+
+  return isInspectableObject(component) ? component : undefined;
+};
+
+const readOwningAngularComponent = (
+  target: Element | object,
+  angularGlobals: AngularDevModeGlobalsApi,
+) => {
+  let component: object | null | undefined;
+
+  try {
+    component = angularGlobals.getOwningComponent?.(target);
+  } catch {
+    component = undefined;
+  }
+
+  return isInspectableObject(component) ? component : undefined;
+};
+
+const resolveClosestNodeIdForComponent = (
+  component: object | undefined,
+  angularGlobals: AngularDevModeGlobalsApi,
+  nodeIdByComponentRef: WeakMap<object, string>,
+) => {
+  const visitedComponents = new Set<unknown>();
+  let currentComponent = component;
+
+  while (
+    currentComponent !== undefined &&
+    !visitedComponents.has(currentComponent)
+  ) {
+    visitedComponents.add(currentComponent);
+
+    const nodeId = nodeIdByComponentRef.get(currentComponent);
+
+    if (nodeId !== undefined) {
+      return nodeId;
+    }
+
+    currentComponent = readOwningAngularComponent(currentComponent, angularGlobals);
+  }
+
+  return undefined;
+};
+
 export const createAngularNodeLookup = (): AngularNodeLookup => {
   let payloadByNodeId = new Map<string, AngularNodeLookupPayload>();
+  let nodeIdByComponentRef = new WeakMap<object, string>();
+  let nodeIdByHostElementRef = new WeakMap<object, string>();
+  let nodeById = new Map<string, InspectorTreeSnapshot['nodes'][number]>();
 
   return {
     refreshFromSnapshot: (options) => {
       const nextPayloadByNodeId = new Map<string, AngularNodeLookupPayload>();
+      const nextNodeIdByComponentRef = new WeakMap<object, string>();
+      const nextNodeIdByHostElementRef = new WeakMap<object, string>();
+      const nextNodeById = new Map(
+        options.snapshot.nodes.map((node) => [node.id, node]),
+      );
       const includedNodeIdSet = new Set(
         options.snapshot.nodes.map((node) => node.id),
       );
@@ -107,12 +223,60 @@ export const createAngularNodeLookup = (): AngularNodeLookup => {
             includedNodeIdSet,
           ),
         });
+
+        nextNodeIdByComponentRef.set(record.component, nodeId);
+        nextNodeIdByHostElementRef.set(record.hostElement, nodeId);
       });
 
       payloadByNodeId = nextPayloadByNodeId;
+      nodeIdByComponentRef = nextNodeIdByComponentRef;
+      nodeIdByHostElementRef = nextNodeIdByHostElementRef;
+      nodeById = nextNodeById;
     },
     resolveByNodeId: (nodeId: string) => {
       return payloadByNodeId.get(nodeId);
+    },
+    resolveClosestComponentPathForElement: (
+      element: Element,
+      angularGlobals: AngularDevModeGlobalsApi,
+    ) => {
+      if (!element.isConnected) {
+        return undefined;
+      }
+
+      let currentElement: Element | null = element;
+
+      while (currentElement !== null) {
+        const directNodeId = resolveClosestNodeIdForComponent(
+          readAngularComponent(currentElement, angularGlobals),
+          angularGlobals,
+          nodeIdByComponentRef,
+        );
+
+        if (directNodeId !== undefined) {
+          return buildComponentPath(directNodeId, nodeById);
+        }
+
+        const hostNodeId = nodeIdByHostElementRef.get(currentElement);
+
+        if (hostNodeId !== undefined) {
+          return buildComponentPath(hostNodeId, nodeById);
+        }
+
+        const owningNodeId = resolveClosestNodeIdForComponent(
+          readOwningAngularComponent(currentElement, angularGlobals),
+          angularGlobals,
+          nodeIdByComponentRef,
+        );
+
+        if (owningNodeId !== undefined) {
+          return buildComponentPath(owningNodeId, nodeById);
+        }
+
+        currentElement = getParentElement(currentElement);
+      }
+
+      return undefined;
     },
   };
 };

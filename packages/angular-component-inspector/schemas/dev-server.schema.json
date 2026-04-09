@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Itera Angular Component Inspector Dev Server Builder",
+  "type": "object",
+  "properties": {
+    "delegateBuilder": {
+      "type": "string",
+      "description": "Optional override for the underlying Angular CLI dev-server builder name."
+    },
+    "inspectorSourceMetadata": {
+      "type": "object",
+      "description": "Reserved source-metadata scaffold options for future Angular instrumentation.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"],
+      "@iteraai/angular-component-inspector": ["./src/index.ts"],
+      "@iteraai/angular-component-inspector/bridgeRuntime": [
+        "./src/bridgeRuntime.ts"
+      ],
+      "@iteraai/angular-component-inspector/embeddedBootstrap": [
+        "./src/embeddedBootstrap.ts"
+      ],
+      "@iteraai/angular-component-inspector/iterationInspector": [
+        "./src/iterationInspector/index.ts"
+      ]
+    },
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src"]
+}

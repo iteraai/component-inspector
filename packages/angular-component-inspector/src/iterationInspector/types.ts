@@ -1,0 +1,404 @@
+export const ITERATION_INSPECTOR_CHANNEL = 'itera:iteration-inspector';
+
+export type IterationElementBounds = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+export type IterationScrollOffset = {
+  x: number;
+  y: number;
+};
+
+export type IterationElementLocator = {
+  urlPath: string;
+  cssSelector: string;
+  domPath: string;
+  tagName: string;
+  role: string | null;
+  accessibleName: string | null;
+  textPreview: string | null;
+  id: string | null;
+  dataTestId: string | null;
+  bounds: IterationElementBounds;
+  scrollOffset: IterationScrollOffset;
+  capturedAt: string;
+  componentPath?: ReadonlyArray<string>;
+  reactComponentPath?: ReadonlyArray<string>;
+};
+
+export type IterationElementSelection = {
+  displayText: string;
+  element: IterationElementLocator;
+  editableValues?: IterationEditableValues;
+};
+
+export type IterationInspectorInvalidationReason =
+  | 'reload'
+  | 'route_change'
+  | 'node_detached';
+
+export type IterationInspectorSelectionMode = 'single' | 'persistent';
+
+export type IterationInspectorDebugDetails = Record<string, unknown>;
+
+export const iterationInspectorRuntimeCapabilities = [
+  'preview_edits_v1',
+] as const;
+
+export type IterationInspectorRuntimeCapability =
+  (typeof iterationInspectorRuntimeCapabilities)[number];
+
+export type IterationPreviewEditValueType =
+  | 'string'
+  | 'number'
+  | 'token'
+  | 'asset_reference';
+
+export type IterationPreviewEditOperation = {
+  fieldId: string;
+  value: string;
+  valueType?: IterationPreviewEditValueType;
+};
+
+export type IterationPreviewTargetEdit = {
+  locator: IterationElementLocator;
+  operations: ReadonlyArray<IterationPreviewEditOperation>;
+};
+
+export const iterationPreviewEditErrorCodes = [
+  'invalid_value',
+  'locator_not_found',
+  'unsupported_field',
+  'unsupported_target',
+  'url_mismatch',
+] as const;
+
+export type IterationPreviewEditErrorCode =
+  (typeof iterationPreviewEditErrorCodes)[number];
+
+export type IterationPreviewEditError = {
+  code: IterationPreviewEditErrorCode;
+  message: string;
+  targetIndex: number;
+  fieldId?: string;
+};
+
+const _iterationEditableValueFieldIds = [
+  'display',
+  'flexDirection',
+  'justifyContent',
+  'alignItems',
+  'alignSelf',
+  'backgroundColor',
+  'textColor',
+  'fontSize',
+  'fontWeight',
+  'textContent',
+  'assetReference',
+  'padding',
+  'margin',
+  'borderRadius',
+] as const;
+
+export type IterationEditableValueFieldId =
+  (typeof _iterationEditableValueFieldIds)[number];
+
+export type IterationEditableValues = Partial<
+  Record<IterationEditableValueFieldId, string>
+>;
+
+type IterationInspectorParentMessageDebugConfig = {
+  debugEnabled?: boolean;
+  debugSessionId?: string;
+};
+
+export type IterationInspectorParentMessage =
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'enter_select_mode';
+      selectionMode?: IterationInspectorSelectionMode;
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'exit_select_mode';
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'clear_hover';
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'sync_preview_edits';
+      revision: number;
+      targets: ReadonlyArray<IterationPreviewTargetEdit>;
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'clear_preview_edits';
+      revision: number;
+    } & IterationInspectorParentMessageDebugConfig);
+
+export type IterationInspectorRuntimeMessage =
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'runtime_ready';
+      urlPath: string;
+      capabilities?: ReadonlyArray<IterationInspectorRuntimeCapability>;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'mode_changed';
+      active: boolean;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'element_selected';
+      selection: IterationElementSelection;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'selection_invalidated';
+      reason: IterationInspectorInvalidationReason;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'preview_edits_status';
+      revision: number;
+      appliedTargetCount: number;
+      errors?: ReadonlyArray<IterationPreviewEditError>;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'debug_log';
+      event: string;
+      sessionId?: string;
+      details?: IterationInspectorDebugDetails;
+    };
+
+export type IterationInspectorRuntime = {
+  start: () => void;
+  stop: () => void;
+  isActive: () => boolean;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+  isFiniteNumber(value) && Number.isInteger(value) && value >= 0;
+
+const isStringOrNull = (value: unknown): value is string | null =>
+  typeof value === 'string' || value === null;
+
+const isStringArray = (value: unknown): value is ReadonlyArray<string> =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+const isComponentPath = (value: unknown): value is ReadonlyArray<string> =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every(
+    (segment) => typeof segment === 'string' && segment.trim().length > 0,
+  );
+
+const isIterationElementBounds = (
+  value: unknown,
+): value is IterationElementBounds => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isFiniteNumber(value.top) &&
+    isFiniteNumber(value.left) &&
+    isFiniteNumber(value.width) &&
+    isFiniteNumber(value.height)
+  );
+};
+
+const isIterationScrollOffset = (
+  value: unknown,
+): value is IterationScrollOffset => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return isFiniteNumber(value.x) && isFiniteNumber(value.y);
+};
+
+const isIterationElementLocator = (
+  value: unknown,
+): value is IterationElementLocator => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (
+    typeof value.urlPath !== 'string' ||
+    typeof value.cssSelector !== 'string' ||
+    typeof value.domPath !== 'string' ||
+    typeof value.tagName !== 'string' ||
+    !isStringOrNull(value.role) ||
+    !isStringOrNull(value.accessibleName) ||
+    !isStringOrNull(value.textPreview) ||
+    !isStringOrNull(value.id) ||
+    !isStringOrNull(value.dataTestId) ||
+    !isIterationElementBounds(value.bounds) ||
+    !isIterationScrollOffset(value.scrollOffset) ||
+    typeof value.capturedAt !== 'string'
+  ) {
+    return false;
+  }
+
+  if (
+    value.componentPath !== undefined &&
+    !isComponentPath(value.componentPath)
+  ) {
+    return false;
+  }
+
+  if (
+    value.reactComponentPath !== undefined &&
+    !isComponentPath(value.reactComponentPath)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
+const isIterationPreviewEditValueType = (
+  value: unknown,
+): value is IterationPreviewEditValueType => {
+  return (
+    typeof value === 'string' &&
+    ['string', 'number', 'token', 'asset_reference'].includes(value)
+  );
+};
+
+const isIterationPreviewEditOperation = (
+  value: unknown,
+): value is IterationPreviewEditOperation => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.fieldId === 'string' &&
+    typeof value.value === 'string' &&
+    (value.valueType === undefined ||
+      isIterationPreviewEditValueType(value.valueType))
+  );
+};
+
+const isIterationPreviewTargetEdit = (
+  value: unknown,
+): value is IterationPreviewTargetEdit => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isIterationElementLocator(value.locator) &&
+    Array.isArray(value.operations) &&
+    value.operations.every(isIterationPreviewEditOperation)
+  );
+};
+
+export const isIterationInspectorParentMessage = (
+  value: unknown,
+): value is IterationInspectorParentMessage => {
+  if (!isRecord(value) || value.channel !== ITERATION_INSPECTOR_CHANNEL) {
+    return false;
+  }
+
+  switch (value.kind) {
+    case 'enter_select_mode': {
+      return (
+        value.selectionMode === undefined ||
+        value.selectionMode === 'single' ||
+        value.selectionMode === 'persistent'
+      );
+    }
+
+    case 'exit_select_mode':
+    case 'clear_hover': {
+      return true;
+    }
+
+    case 'sync_preview_edits': {
+      return (
+        isNonNegativeInteger(value.revision) &&
+        Array.isArray(value.targets) &&
+        value.targets.every(isIterationPreviewTargetEdit)
+      );
+    }
+
+    case 'clear_preview_edits': {
+      return isNonNegativeInteger(value.revision);
+    }
+
+    default: {
+      return false;
+    }
+  }
+};
+
+export const isIterationInspectorRuntimeMessage = (
+  value: unknown,
+): value is IterationInspectorRuntimeMessage => {
+  if (!isRecord(value) || value.channel !== ITERATION_INSPECTOR_CHANNEL) {
+    return false;
+  }
+
+  switch (value.kind) {
+    case 'runtime_ready': {
+      return (
+        typeof value.urlPath === 'string' &&
+        (value.capabilities === undefined ||
+          (Array.isArray(value.capabilities) &&
+            isStringArray(value.capabilities)))
+      );
+    }
+
+    case 'mode_changed': {
+      return typeof value.active === 'boolean';
+    }
+
+    case 'element_selected': {
+      return (
+        isRecord(value.selection) &&
+        typeof value.selection.displayText === 'string' &&
+        isIterationElementLocator(value.selection.element)
+      );
+    }
+
+    case 'selection_invalidated': {
+      return (
+        value.reason === 'reload' ||
+        value.reason === 'route_change' ||
+        value.reason === 'node_detached'
+      );
+    }
+
+    case 'preview_edits_status': {
+      return (
+        isNonNegativeInteger(value.revision) &&
+        isNonNegativeInteger(value.appliedTargetCount)
+      );
+    }
+
+    case 'debug_log': {
+      return typeof value.event === 'string';
+    }
+
+    default: {
+      return false;
+    }
+  }
+};

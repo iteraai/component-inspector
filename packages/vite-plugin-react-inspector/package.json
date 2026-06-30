@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/vite-plugin-react-inspector",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "description": "Vite plugin that injects the Itera React component inspector runtime into React-Vite apps.",

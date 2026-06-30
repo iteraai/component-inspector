@@ -3,5 +3,6 @@ node_modules/
 .angular/
 coverage/
 dist/
+dist-react-plugin/
 .DS_Store
 output/playwright/

@@ -48,6 +48,18 @@ const sdkPackages = [
     ]
   },
   {
+    directory: path.join(repoRoot, 'packages/vite-plugin-react-inspector'),
+    name: '@iteraai/vite-plugin-react-inspector',
+    requiredFiles: [
+      'README.md',
+      'dist/client.js',
+      'dist/client.d.ts',
+      'dist/index.js',
+      'dist/index.d.ts',
+      'package.json'
+    ]
+  },
+  {
     directory: path.join(repoRoot, 'packages/vue-component-inspector'),
     name: '@iteraai/vue-component-inspector',
     requiredFiles: [
@@ -158,6 +170,7 @@ const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
 const fixturePackageJson = (
   protocolTarball,
   reactBridgeTarball,
+  viteReactPluginTarball,
   vueBridgeTarball,
   angularBridgeTarball,
 ) => ({
@@ -168,6 +181,7 @@ const fixturePackageJson = (
   dependencies: {
     '@iteraai/inspector-protocol': `file:${protocolTarball}`,
     '@iteraai/react-component-inspector': `file:${reactBridgeTarball}`,
+    '@iteraai/vite-plugin-react-inspector': `file:${viteReactPluginTarball}`,
     '@iteraai/vue-component-inspector': `file:${vueBridgeTarball}`,
     '@iteraai/angular-component-inspector': `file:${angularBridgeTarball}`,
     '@angular/core': '^21.0.0',
@@ -176,7 +190,8 @@ const fixturePackageJson = (
     vue: '^3.5.0'
   },
   devDependencies: {
-    typescript: '~5.6.2'
+    typescript: '~5.6.2',
+    vite: '^6.0.5'
   }
 });
 
@@ -226,6 +241,16 @@ import {
   initStorybookManagerRelay,
   resolveStorybookPreviewHostOrigins,
 } from '@iteraai/react-component-inspector/storybook';
+import {
+  createIteraReactInspectorVitePlugin,
+  iteraReactInspector,
+  type IteraReactInspectorVitePluginOptions,
+} from '@iteraai/vite-plugin-react-inspector';
+import {
+  bootIteraReactInspectorViteRuntime,
+  stopIteraReactInspectorViteRuntime,
+  type IteraReactInspectorViteRuntimeOptions,
+} from '@iteraai/vite-plugin-react-inspector/client';
 import {
   resolveVueInspectorRuntimeConfig,
 } from '@iteraai/vue-component-inspector';
@@ -278,6 +303,17 @@ const storybookPreviewOrigins = resolveStorybookPreviewHostOrigins({
   hostOrigins: ['https://app.iteradev.ai'],
   referrer: 'https://storybook.iteradev.ai/?path=/story/button--primary',
 });
+const vitePluginOptions: IteraReactInspectorVitePluginOptions = {
+  enabled: true,
+  hostOrigins: ['https://app.iteradev.ai'],
+};
+const viteRuntimeOptions: IteraReactInspectorViteRuntimeOptions = {
+  enabled: false,
+  hostOrigins: [],
+};
+const vitePlugin = createIteraReactInspectorVitePlugin(vitePluginOptions);
+const vitePluginAlias = iteraReactInspector(vitePluginOptions);
+const viteRuntimeStop = bootIteraReactInspectorViteRuntime(viteRuntimeOptions);
 const vueRuntimeConfig: Parameters<typeof resolveVueInspectorRuntimeConfig>[0] = {
   adapter: 'vue3',
   mountedAppDiscovery: {
@@ -313,6 +349,10 @@ void bootstrapFn;
 void initBridgeFn;
 void initStorybookRelayFn;
 void storybookPreviewOrigins;
+void vitePlugin;
+void vitePluginAlias;
+void viteRuntimeStop;
+void stopIteraReactInspectorViteRuntime;
 void vueRuntimeMessage;
 void vueBootstrapFn;
 void initVueBridgeFn;
@@ -366,6 +406,14 @@ import {
   initStorybookManagerRelay,
   resolveStorybookPreviewHostOrigins,
 } from '@iteraai/react-component-inspector/storybook';
+import {
+  createIteraReactInspectorVitePlugin,
+  iteraReactInspector,
+} from '@iteraai/vite-plugin-react-inspector';
+import {
+  bootIteraReactInspectorViteRuntime,
+  stopIteraReactInspectorViteRuntime,
+} from '@iteraai/vite-plugin-react-inspector/client';
 import {
   defaultVueInspectorRuntimeConfig,
   defaultVueMountedAppDiscovery,
@@ -494,6 +542,10 @@ assert.deepEqual(
 assert.equal(typeof bootstrapEmbeddedInspectorBridge, 'function');
 assert.equal(typeof initReactInspectorBridge, 'function');
 assert.equal(typeof initStorybookManagerRelay, 'function');
+assert.equal(typeof createIteraReactInspectorVitePlugin, 'function');
+assert.equal(iteraReactInspector, createIteraReactInspectorVitePlugin);
+assert.equal(typeof bootIteraReactInspectorViteRuntime, 'function');
+assert.equal(typeof stopIteraReactInspectorViteRuntime, 'function');
 assert.deepEqual(
   resolveStorybookPreviewHostOrigins({
     hostOrigins: ['https://app.iteradev.ai'],
@@ -599,12 +651,17 @@ const main = () => {
       npmEnvironment,
     );
     const vueBridgeTarball = packPackage(
-      sdkPackages[2],
+      sdkPackages[3],
       packDestination,
       npmEnvironment,
     );
     const angularBridgeTarball = packPackage(
-      sdkPackages[3],
+      sdkPackages[4],
+      packDestination,
+      npmEnvironment,
+    );
+    const viteReactPluginTarball = packPackage(
+      sdkPackages[2],
       packDestination,
       npmEnvironment,
     );
@@ -615,6 +672,7 @@ const main = () => {
         fixturePackageJson(
           protocolTarball,
           reactBridgeTarball,
+          viteReactPluginTarball,
           vueBridgeTarball,
           angularBridgeTarball,
         ),

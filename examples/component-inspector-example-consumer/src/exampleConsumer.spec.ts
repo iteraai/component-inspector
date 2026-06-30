@@ -82,6 +82,8 @@ test('resolves public package imports to built dist entrypoints', () => {
     resolveInspectorImportPath('@iteraai/inspector-protocol/errors'),
     resolveInspectorImportPath('@iteraai/react-component-inspector'),
     resolveInspectorImportPath('@iteraai/react-component-inspector/iterationInspector'),
+    resolveInspectorImportPath('@iteraai/vite-plugin-react-inspector'),
+    resolveInspectorImportPath('@iteraai/vite-plugin-react-inspector/client'),
   ];
 
   for (const resolvedEntryPoint of resolvedEntryPoints) {

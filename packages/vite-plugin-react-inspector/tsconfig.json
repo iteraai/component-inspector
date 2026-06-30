@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@iteraai/inspector-protocol": ["../inspector-protocol/src/index.ts"],
+      "@iteraai/react-component-inspector": [
+        "../react-component-inspector/src/index.ts"
+      ],
+      "@iteraai/react-component-inspector/embeddedBootstrap": [
+        "../react-component-inspector/src/embeddedBootstrap.ts"
+      ],
+      "@iteraai/react-component-inspector/iterationInspector": [
+        "../react-component-inspector/src/iterationInspector/index.ts"
+      ],
+      "@iteraai/vite-plugin-react-inspector": ["./src/index.ts"],
+      "@iteraai/vite-plugin-react-inspector/client": ["./src/client.ts"]
+    },
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src"]
+}

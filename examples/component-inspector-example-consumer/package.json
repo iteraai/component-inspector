@@ -5,10 +5,13 @@
   "description": "Example host and embedded consumer harness for the public Itera component inspector SDK.",
   "scripts": {
     "build": "vite build",
+    "build:react-plugin": "vite build --config vite.react-plugin.config.ts",
     "dev:embedded": "npm run dev:embedded:react",
+    "dev:embedded:react-plugin": "vite --config vite.react-plugin.config.ts --host 127.0.0.1 --port 4175 --open /embedded-plugin.html",
     "dev:embedded:react": "vite --host 127.0.0.1 --port 4174 --open /embedded.html",
     "dev:embedded:vue": "vite --host 127.0.0.1 --port 4174 --open /embedded-vue.html",
     "dev:host": "vite --host 127.0.0.1 --port 4173 --open /host.html",
+    "dev:host:react-plugin": "vite --host 127.0.0.1 --port 4173 --open \"/host.html?embeddedUrl=http%3A%2F%2F127.0.0.1%3A4175%2Fembedded-plugin.html\"",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:react": "vitest run src/exampleConsumer.spec.ts",
@@ -20,6 +23,7 @@
   "dependencies": {
     "@iteraai/inspector-protocol": "0.1.0",
     "@iteraai/react-component-inspector": "0.4.1",
+    "@iteraai/vite-plugin-react-inspector": "0.0.0",
     "@iteraai/vue-component-inspector": "0.2.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",

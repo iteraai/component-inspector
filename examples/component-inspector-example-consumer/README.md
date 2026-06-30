@@ -50,6 +50,25 @@ Open:
 
 - Vue embedded: `http://127.0.0.1:4174/embedded-vue.html`
 
+To test the React-Vite plugin integration, run the plugin-driven embedded app
+instead of the manual React embedded page:
+
+```bash
+npm run example:host:react-plugin
+npm run example:embedded:react-plugin
+```
+
+Open:
+
+- host with plugin iframe: `http://127.0.0.1:4173/host.html?embeddedUrl=http%3A%2F%2F127.0.0.1%3A4175%2Fembedded-plugin.html`
+- plugin embedded: `http://127.0.0.1:4175/embedded-plugin.html`
+
+The plugin example uses
+[`vite.react-plugin.config.ts`](./vite.react-plugin.config.ts). Its React
+entrypoint, [`src/embeddedPluginMain.tsx`](./src/embeddedPluginMain.tsx), only
+mounts the app; the inspector bridge and iteration runtime are injected by
+`@iteraai/vite-plugin-react-inspector`.
+
 The host page defaults its iframe to:
 
 ```text
@@ -63,6 +82,7 @@ Run the example package checks directly when you want to focus on this fixture:
 ```bash
 npm run lint:ci --workspace component-inspector-example-consumer
 npm run type-check --workspace component-inspector-example-consumer
+npm run build:react-plugin --workspace component-inspector-example-consumer
 npm run test --workspace component-inspector-example-consumer
 npm run test:react --workspace component-inspector-example-consumer
 npm run test:vue --workspace component-inspector-example-consumer

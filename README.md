@@ -1,6 +1,6 @@
 # component-inspector
 
-Public monorepo for the Itera component inspector SDK packages. It currently includes the React, Vue, and Angular client SDK packages, alongside the shared protocol package `@iteraai/inspector-protocol`.
+Public monorepo for the Itera component inspector SDK packages. It currently includes the React, React-Vite, Vue, and Angular client SDK packages, alongside the shared protocol package `@iteraai/inspector-protocol`.
 
 The package names and import paths in this repo are the intended public contract. Releases are managed with
 Changesets and an automated GitHub Actions release PR flow so package changes land with explicit semver intent.
@@ -23,6 +23,7 @@ Detailed customer integration guidance now lives at [iteraai.github.io/docs](htt
 | ------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `@iteraai/inspector-protocol`        | [`packages/inspector-protocol`](./packages/inspector-protocol)               | Shared protocol constants, message builders, validators, origin helpers, and inspector security event constants.  |
 | `@iteraai/react-component-inspector` | [`packages/react-component-inspector`](./packages/react-component-inspector) | Embedded React bridge, iteration inspector runtime, runtime telemetry helpers, and adapter/runtime configuration. |
+| `@iteraai/vite-plugin-react-inspector` | [`packages/vite-plugin-react-inspector`](./packages/vite-plugin-react-inspector) | Vite plugin that injects the React inspector runtime into React-Vite apps without editing the app entrypoint. |
 | `@iteraai/vue-component-inspector`   | [`packages/vue-component-inspector`](./packages/vue-component-inspector)     | Embedded Vue bridge, mounted-app registration/bootstrap helpers, iteration inspector runtime, and adapter/runtime configuration. |
 | `@iteraai/angular-component-inspector` | [`packages/angular-component-inspector`](./packages/angular-component-inspector) | Embedded Angular bridge, Angular CLI source metadata builders, iteration inspector runtime, and adapter/runtime configuration. |
 
@@ -52,8 +53,8 @@ For the first publish only, maintainers should either:
 - or publish the first release manually from the release PR commit and configure trusted publishers before the next release
 
 After the package pages exist, configure npm trusted publishers for `@iteraai/inspector-protocol`,
-`@iteraai/react-component-inspector`, `@iteraai/vue-component-inspector`, and
-`@iteraai/angular-component-inspector` to point at `iteraai/component-inspector` and
+`@iteraai/react-component-inspector`, `@iteraai/vite-plugin-react-inspector`,
+`@iteraai/vue-component-inspector`, and `@iteraai/angular-component-inspector` to point at `iteraai/component-inspector` and
 `.github/workflows/release.yml`, then remove any bootstrap token path. Future releases should rely on trusted
 publishing only.
 
@@ -95,6 +96,7 @@ The current supported customer runtimes are browser-based React, Vue, and Angula
 - React peer dependency support is `^18.3.0 || ^19.0.0`.
 - Exported adapter targets are `auto`, `vite`, `next`, `cra`, and `fiber`.
 - The documented embedded bootstrap helpers currently initialize the bridge with `runtimeConfig: { adapter: 'fiber' }`.
+- `@iteraai/vite-plugin-react-inspector` is the React-Vite integration package. It injects the React inspector runtime through Vite HTML/virtual module hooks and defaults to serve/dev-only injection.
 - `@iteraai/vue-component-inspector` is the Vue 3 SDK package included in this repo.
 - Vue peer dependency support is `^3.4.0`.
 - Exported Vue adapter targets are `auto` and `vue3`.
@@ -126,6 +128,7 @@ packages/
   angular-component-inspector/
   inspector-protocol/
   react-component-inspector/
+  vite-plugin-react-inspector/
   vue-component-inspector/
 scripts/
   validate-inspector-sdk-packages.mjs
@@ -136,6 +139,7 @@ Package-level summaries live in:
 - [`packages/inspector-protocol/README.md`](./packages/inspector-protocol/README.md)
 - [`packages/angular-component-inspector/README.md`](./packages/angular-component-inspector/README.md)
 - [`packages/react-component-inspector/README.md`](./packages/react-component-inspector/README.md)
+- [`packages/vite-plugin-react-inspector/README.md`](./packages/vite-plugin-react-inspector/README.md)
 - [`packages/vue-component-inspector/README.md`](./packages/vue-component-inspector/README.md)
 
 Use the docs site links above for the detailed customer integration story.
@@ -165,8 +169,10 @@ Useful package-scoped commands:
 npm run test --workspace @iteraai/inspector-protocol
 npm run test --workspace @iteraai/angular-component-inspector
 npm run test --workspace @iteraai/react-component-inspector
+npm run test --workspace @iteraai/vite-plugin-react-inspector
 npm run test --workspace @iteraai/vue-component-inspector
 npm run lint:ci --workspace @iteraai/react-component-inspector
+npm run lint:ci --workspace @iteraai/vite-plugin-react-inspector
 npm run lint:ci --workspace @iteraai/vue-component-inspector
 npm run test:examples
 npm run test:examples:react
@@ -181,4 +187,11 @@ To inspect the example host/embed flow manually after building the SDK packages:
 npm run example:host
 npm run example:embedded:react
 npm run example:embedded:vue
+```
+
+To test the React-Vite plugin example, run these in separate terminals:
+
+```bash
+npm run example:host:react-plugin
+npm run example:embedded:react-plugin
 ```

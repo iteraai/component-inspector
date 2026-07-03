@@ -331,12 +331,12 @@ describe('iteration inspector runtime element capture', () => {
       expect.objectContaining({
         canvasHeight: 16,
         canvasWidth: 64,
-        height: 16,
+        height: 80,
         style: expect.objectContaining({
           transform: 'translate(-12px, -8px)',
           transformOrigin: 'top left',
         }),
-        width: 64,
+        width: 200,
       }),
     );
     expect(getCaptureMessage(postMessageSpy, 'text-capture')).toEqual(

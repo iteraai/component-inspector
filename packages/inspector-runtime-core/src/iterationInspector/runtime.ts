@@ -129,8 +129,10 @@ type ElementCaptureDimensions = {
 };
 
 type DomRasterizationCrop = {
+  height: number;
   offsetX: number;
   offsetY: number;
+  width: number;
 };
 
 export type IterationInspectorRuntime = {
@@ -2153,7 +2155,8 @@ const captureImageElement = async (
 
 const captureDomElement = async (
   element: HTMLElement,
-  rect: IterationElementBounds,
+  rasterizedRect: IterationElementBounds,
+  resultRect: IterationElementBounds,
   dimensions: ElementCaptureDimensions,
   win: Window,
   crop?: DomRasterizationCrop,
@@ -2173,14 +2176,14 @@ const captureDomElement = async (
         ...(crop === undefined
           ? {}
           : {
-              canvasHeight: rect.height,
-              canvasWidth: rect.width,
-              height: rect.height,
+              canvasHeight: crop.height,
+              canvasWidth: crop.width,
+              height: rasterizedRect.height,
               style: {
                 transform: `translate(${-crop.offsetX}px, ${-crop.offsetY}px)`,
                 transformOrigin: 'top left',
               },
-              width: rect.width,
+              width: rasterizedRect.width,
             }),
         pixelRatio: dimensions.scale,
         type: 'image/png',
@@ -2197,7 +2200,7 @@ const captureDomElement = async (
       );
     }
 
-    return buildCaptureSuccess(blob, 'dom-rasterizer', rect, dimensions, win);
+    return buildCaptureSuccess(blob, 'dom-rasterizer', resultRect, dimensions, win);
   } catch (error) {
     return createElementCaptureFailure(
       'dom_rasterization_failed',
@@ -2263,10 +2266,14 @@ const captureElementCrop = async (
   const textSelectionCrop =
     request.locator.role === 'text'
       ? {
+          height: rect.height,
           offsetX: rect.left - elementRect.left,
           offsetY: rect.top - elementRect.top,
+          width: rect.width,
         }
       : undefined;
+  const domRasterizedRect =
+    textSelectionCrop === undefined ? rect : elementRect;
 
   let result: IterationElementCaptureResult;
 
@@ -2283,6 +2290,7 @@ const captureElementCrop = async (
       } else {
         result = await captureDomElement(
           canvasElement,
+          domRasterizedRect,
           rect,
           dimensions,
           win,
@@ -2312,6 +2320,7 @@ const captureElementCrop = async (
       } else {
         result = await captureDomElement(
           imageElement,
+          domRasterizedRect,
           rect,
           dimensions,
           win,
@@ -2331,6 +2340,7 @@ const captureElementCrop = async (
   } else if (isDomElement) {
     result = await captureDomElement(
       resolution.element as HTMLElement,
+      domRasterizedRect,
       rect,
       dimensions,
       win,

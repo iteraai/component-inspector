@@ -1014,6 +1014,53 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('uses DOM rasterization for styled canvas captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<canvas id="capture-canvas" style="border: 4px solid red; border-radius: 12px; transform: rotate(15deg);"></canvas>';
+    const canvas = document.getElementById('capture-canvas');
+    expect(canvas).not.toBeNull();
+    assert(canvas instanceof HTMLCanvasElement);
+    mockElementRect(canvas);
+    canvas.toBlob = vi.fn((callback: BlobCallback) => {
+      callback(new Blob(['native-canvas'], { type: 'image/png' }));
+    });
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(canvas).element;
+
+    requestCapture(locator, { requestId: 'styled-canvas-capture' });
+    await flushCapture();
+
+    expect(canvas.toBlob).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      canvas,
+      expect.objectContaining({
+        cacheBust: true,
+        pixelRatio: 1,
+        type: 'image/png',
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'styled-canvas-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'styled-canvas-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'dom-rasterizer',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('returns canvas_tainted when canvas export cannot produce a Blob', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML = '<canvas id="capture-canvas"></canvas>';

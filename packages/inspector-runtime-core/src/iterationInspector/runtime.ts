@@ -1922,6 +1922,11 @@ const shouldRasterizeImageElement = (
   );
 };
 
+const shouldRasterizeCanvasElement = (
+  element: HTMLCanvasElement,
+  win: Window,
+) => hasStyledImageEffects(win.getComputedStyle(element));
+
 const getImageObjectFitSize = (
   fit: string,
   boxWidth: number,
@@ -2221,14 +2226,28 @@ const captureElementCrop = async (
   let result: IterationElementCaptureResult;
 
   if (isCanvasElement) {
-    result = await captureCanvasElement(
-      resolution.element as HTMLCanvasElement,
-      rect,
-      request,
-      dimensions,
-      doc,
-      win,
-    );
+    const canvasElement = resolution.element as HTMLCanvasElement;
+
+    if (shouldRasterizeCanvasElement(canvasElement, win)) {
+      if ((request.padding ?? 0) > 0) {
+        result = createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Padding is not supported for DOM rasterizer captures in this POC.',
+        );
+      } else {
+        result = await captureDomElement(canvasElement, rect, dimensions, win);
+      }
+    } else {
+      result = await captureCanvasElement(
+        canvasElement,
+        rect,
+        request,
+        dimensions,
+        doc,
+        win,
+      );
+    }
   } else if (isImageElement) {
     const imageElement = resolution.element as HTMLImageElement;
 

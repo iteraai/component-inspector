@@ -1681,6 +1681,246 @@ const captureCanvasElement = async (
   }
 };
 
+type ImageDrawRegion = {
+  source: {
+    height: number;
+    width: number;
+    x: number;
+    y: number;
+  };
+  target: {
+    height: number;
+    width: number;
+    x: number;
+    y: number;
+  };
+};
+
+const clampMeasurement = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const parseObjectPositionComponent = (
+  value: string | undefined,
+  axis: 'x' | 'y',
+) => {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === undefined || normalized.length === 0) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (normalized === 'left' || normalized === 'top') {
+    return { type: 'percent' as const, value: 0 };
+  }
+
+  if (normalized === 'center') {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (normalized === 'right' || normalized === 'bottom') {
+    return { type: 'percent' as const, value: 1 };
+  }
+
+  if (normalized.endsWith('%')) {
+    const percent = Number.parseFloat(normalized.slice(0, -1));
+
+    if (Number.isFinite(percent)) {
+      return { type: 'percent' as const, value: percent / 100 };
+    }
+  }
+
+  if (normalized.endsWith('px')) {
+    const length = Number.parseFloat(normalized.slice(0, -2));
+
+    if (Number.isFinite(length)) {
+      return { type: 'length' as const, value: length };
+    }
+  }
+
+  if (axis === 'x' && (normalized === 'top' || normalized === 'bottom')) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (axis === 'y' && (normalized === 'left' || normalized === 'right')) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  return { type: 'percent' as const, value: 0.5 };
+};
+
+const resolveObjectPositionOffset = (
+  containerSize: number,
+  objectSize: number,
+  position: ReturnType<typeof parseObjectPositionComponent>,
+) => {
+  if (position.type === 'length') {
+    return position.value;
+  }
+
+  return (containerSize - objectSize) * position.value;
+};
+
+const getObjectPositionComponents = (objectPosition: string) => {
+  const parts = objectPosition
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.length > 0);
+
+  if (parts.length === 0) {
+    return ['50%', '50%'] as const;
+  }
+
+  if (parts.length === 1) {
+    if (parts[0] === 'top' || parts[0] === 'bottom') {
+      return ['50%', parts[0]] as const;
+    }
+
+    return [parts[0], '50%'] as const;
+  }
+
+  const [first, second] = parts;
+  const firstIsVertical = first === 'top' || first === 'bottom';
+  const secondIsHorizontal = second === 'left' || second === 'right';
+
+  if (firstIsVertical && secondIsHorizontal) {
+    return [second, first] as const;
+  }
+
+  return [first, second] as const;
+};
+
+const getImageObjectFitSize = (
+  fit: string,
+  boxWidth: number,
+  boxHeight: number,
+  naturalWidth: number,
+  naturalHeight: number,
+) => {
+  if (fit === 'cover') {
+    const scale = Math.max(boxWidth / naturalWidth, boxHeight / naturalHeight);
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  if (fit === 'contain') {
+    const scale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  if (fit === 'none') {
+    return {
+      height: naturalHeight,
+      width: naturalWidth,
+    };
+  }
+
+  if (fit === 'scale-down') {
+    const containScale = Math.min(
+      boxWidth / naturalWidth,
+      boxHeight / naturalHeight,
+    );
+    const scale = Math.min(1, containScale);
+
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  return {
+    height: boxHeight,
+    width: boxWidth,
+  };
+};
+
+const getImageDrawRegion = (
+  element: HTMLImageElement,
+  rect: IterationElementBounds,
+  win: Window,
+): ImageDrawRegion | null => {
+  const style = win.getComputedStyle(element);
+  const fit = style.objectFit || 'fill';
+
+  if (fit === 'fill') {
+    return {
+      source: {
+        x: 0,
+        y: 0,
+        width: element.naturalWidth,
+        height: element.naturalHeight,
+      },
+      target: {
+        x: 0,
+        y: 0,
+        width: rect.width,
+        height: rect.height,
+      },
+    };
+  }
+
+  const objectSize = getImageObjectFitSize(
+    fit,
+    rect.width,
+    rect.height,
+    element.naturalWidth,
+    element.naturalHeight,
+  );
+  const [positionX, positionY] = getObjectPositionComponents(
+    style.objectPosition || '50% 50%',
+  );
+  const objectX = resolveObjectPositionOffset(
+    rect.width,
+    objectSize.width,
+    parseObjectPositionComponent(positionX, 'x'),
+  );
+  const objectY = resolveObjectPositionOffset(
+    rect.height,
+    objectSize.height,
+    parseObjectPositionComponent(positionY, 'y'),
+  );
+  const visibleLeft = clampMeasurement(objectX, 0, rect.width);
+  const visibleTop = clampMeasurement(objectY, 0, rect.height);
+  const visibleRight = clampMeasurement(objectX + objectSize.width, 0, rect.width);
+  const visibleBottom = clampMeasurement(
+    objectY + objectSize.height,
+    0,
+    rect.height,
+  );
+  const visibleWidth = visibleRight - visibleLeft;
+  const visibleHeight = visibleBottom - visibleTop;
+
+  if (visibleWidth <= 0 || visibleHeight <= 0) {
+    return null;
+  }
+
+  const scaleX = objectSize.width / element.naturalWidth;
+  const scaleY = objectSize.height / element.naturalHeight;
+
+  return {
+    source: {
+      x: clampMeasurement((visibleLeft - objectX) / scaleX, 0, element.naturalWidth),
+      y: clampMeasurement(
+        (visibleTop - objectY) / scaleY,
+        0,
+        element.naturalHeight,
+      ),
+      width: clampMeasurement(visibleWidth / scaleX, 0, element.naturalWidth),
+      height: clampMeasurement(visibleHeight / scaleY, 0, element.naturalHeight),
+    },
+    target: {
+      x: visibleLeft,
+      y: visibleTop,
+      width: visibleWidth,
+      height: visibleHeight,
+    },
+  };
+};
+
 const captureImageElement = async (
   element: HTMLImageElement,
   rect: IterationElementBounds,
@@ -1699,6 +1939,16 @@ const captureImageElement = async (
 
   try {
     const padding = request.padding ?? 0;
+    const drawRegion = getImageDrawRegion(element, rect, win);
+
+    if (drawRegion === null) {
+      return createElementCaptureFailure(
+        'unsupported_target',
+        win,
+        'Image target has no visible rendered content.',
+      );
+    }
+
     const exportCanvas = doc.createElement('canvas');
     exportCanvas.width = dimensions.width;
     exportCanvas.height = dimensions.height;
@@ -1714,14 +1964,14 @@ const captureImageElement = async (
 
     context.drawImage(
       element,
-      0,
-      0,
-      element.naturalWidth,
-      element.naturalHeight,
-      Math.round(padding * dimensions.scale),
-      Math.round(padding * dimensions.scale),
-      Math.max(1, Math.round(rect.width * dimensions.scale)),
-      Math.max(1, Math.round(rect.height * dimensions.scale)),
+      drawRegion.source.x,
+      drawRegion.source.y,
+      drawRegion.source.width,
+      drawRegion.source.height,
+      Math.round((padding + drawRegion.target.x) * dimensions.scale),
+      Math.round((padding + drawRegion.target.y) * dimensions.scale),
+      Math.max(1, Math.round(drawRegion.target.width * dimensions.scale)),
+      Math.max(1, Math.round(drawRegion.target.height * dimensions.scale)),
     );
 
     const blob = await canvasToBlob(exportCanvas, 'image/png');

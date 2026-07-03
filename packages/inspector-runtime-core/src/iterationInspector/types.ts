@@ -12,6 +12,8 @@ export type IterationScrollOffset = {
   y: number;
 };
 
+export type IterationElementTargetKind = 'element' | 'text';
+
 export type IterationElementLocator = {
   urlPath: string;
   cssSelector: string;
@@ -25,6 +27,7 @@ export type IterationElementLocator = {
   bounds: IterationElementBounds;
   scrollOffset: IterationScrollOffset;
   capturedAt: string;
+  targetKind?: IterationElementTargetKind;
   componentPath?: ReadonlyArray<string>;
   // Legacy compatibility alias for existing React consumers.
   reactComponentPath?: ReadonlyArray<string>;
@@ -366,6 +369,14 @@ const isIterationElementLocator = (
     !isIterationElementBounds(value.bounds) ||
     !isIterationScrollOffset(value.scrollOffset) ||
     typeof value.capturedAt !== 'string'
+  ) {
+    return false;
+  }
+
+  if (
+    value.targetKind !== undefined &&
+    value.targetKind !== 'element' &&
+    value.targetKind !== 'text'
   ) {
     return false;
   }

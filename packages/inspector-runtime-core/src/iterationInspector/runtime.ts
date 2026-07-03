@@ -857,6 +857,7 @@ const buildInspectableTargetSelection = (
       accessibleName: getInspectableTargetAccessibleName(target, doc),
       textPreview: getInspectableTargetTextPreview(target),
       bounds: getInspectableTargetBounds(target, doc),
+      targetKind: target.kind,
     },
     editableValues: getEditableValuesForElement(target.element, win),
   };
@@ -923,6 +924,7 @@ const buildIterationElementLocator = (
     y: roundMeasurement(win.scrollY),
   },
   capturedAt: new Date().toISOString(),
+  targetKind: 'element',
   ...buildSelectionComponentPathFields(element, win),
 });
 
@@ -2393,12 +2395,13 @@ const captureElementCrop = async (
   const elementRect = buildBoundsFromRect(
     resolution.element.getBoundingClientRect(),
   );
+  const isTextLocator = request.locator.targetKind === 'text';
   const textBounds =
-    request.locator.role === 'text'
+    isTextLocator
       ? getCurrentTextLocatorBounds(resolution.element, request.locator, doc)
       : null;
 
-  if (request.locator.role === 'text' && textBounds === null) {
+  if (isTextLocator && textBounds === null) {
     return createElementCaptureFailure(
       'locator_not_found',
       win,
@@ -2424,7 +2427,7 @@ const captureElementCrop = async (
   }
 
   const textSelectionCrop =
-    request.locator.role === 'text'
+    isTextLocator
       ? {
           height: rect.height,
           offsetX: rect.left - elementRect.left,

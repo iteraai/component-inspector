@@ -338,6 +338,63 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
+  test('captures ARIA text role targets as element locators', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<div id="role-text-target" role="text"><span>Visible label</span></div>';
+    const target = document.getElementById('role-text-target');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLDivElement);
+    mockElementRect(target, {
+      height: 44,
+      left: 14,
+      top: 18,
+      width: 180,
+    });
+    const locator: IterationElementLocator = {
+      ...buildIterationElementSelection(target).element,
+      role: 'text',
+      targetKind: undefined,
+    };
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+
+    requestCapture(locator, { requestId: 'role-text-element-capture' });
+    await flushCapture();
+
+    expect(toCanvas).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({
+        height: 44,
+        width: 180,
+      }),
+    );
+    expect(
+      getCaptureMessage(postMessageSpy, 'role-text-element-capture'),
+    ).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          height: 44,
+          rect: expect.objectContaining({
+            height: 44,
+            width: 180,
+          }),
+          status: 'captured',
+          width: 180,
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('uses text selection bounds when capturing a text locator', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML =
@@ -389,6 +446,7 @@ describe('iteration inspector runtime element capture', () => {
       ...buildIterationElementSelection(target).element,
       bounds: staleTextBounds,
       role: 'text',
+      targetKind: 'text',
     };
     const postMessageSpy = vi
       .spyOn(window, 'postMessage')
@@ -502,6 +560,7 @@ describe('iteration inspector runtime element capture', () => {
       accessibleName: 'Save',
       bounds: secondTextBounds,
       role: 'text',
+      targetKind: 'text',
       textPreview: 'Save',
     };
     const postMessageSpy = vi
@@ -575,6 +634,7 @@ describe('iteration inspector runtime element capture', () => {
     const locator: IterationElementLocator = {
       ...buildIterationElementSelection(target).element,
       role: 'text',
+      targetKind: 'text',
     };
     const postMessageSpy = vi
       .spyOn(window, 'postMessage')
@@ -673,6 +733,7 @@ describe('iteration inspector runtime element capture', () => {
       ...buildIterationElementSelection(target).element,
       bounds: currentTextBounds,
       role: 'text',
+      targetKind: 'text',
     };
     const postMessageSpy = vi
       .spyOn(window, 'postMessage')

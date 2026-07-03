@@ -1861,6 +1861,18 @@ const hasCssEffectValue = (value: string | undefined) => {
   );
 };
 
+const hasVisibleBackgroundColor = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  return (
+    normalized !== undefined &&
+    normalized.length > 0 &&
+    normalized !== 'transparent' &&
+    normalized !== 'rgba(0, 0, 0, 0)' &&
+    normalized !== 'rgba(0,0,0,0)'
+  );
+};
+
 const hasNonZeroBoxEdge = (
   style: CSSStyleDeclaration,
   propertyNames: readonly (keyof CSSStyleDeclaration)[],
@@ -1901,6 +1913,8 @@ const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
     hasBorderRadius ||
     hasBorderWidth ||
     hasPadding ||
+    hasVisibleBackgroundColor(style.backgroundColor) ||
+    hasCssEffectValue(style.backgroundImage) ||
     hasCssEffectValue(style.clipPath) ||
     hasCssEffectValue(style.filter) ||
     hasCssEffectValue(style.transform) ||

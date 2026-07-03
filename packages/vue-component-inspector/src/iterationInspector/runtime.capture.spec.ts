@@ -887,17 +887,7 @@ describe('iteration inspector runtime element capture', () => {
     expect(getCaptureMessage(
       context.postMessageSpy,
       'invalid-allowlist-capture',
-    )).toEqual(
-      expect.objectContaining({
-        kind: 'element_crop_captured',
-        requestId: 'invalid-allowlist-capture',
-        result: expect.objectContaining({
-          status: 'unavailable',
-          reason: 'unsupported_target',
-          detail: 'Element capture requires configured trusted host origins.',
-        }),
-      }),
-    );
+    )).toBeUndefined();
 
     context.runtime.stop();
   });

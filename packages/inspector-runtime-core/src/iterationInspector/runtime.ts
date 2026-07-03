@@ -2923,8 +2923,9 @@ export const createIterationInspectorRuntime = ({
   let previewPatchSession: PreviewPatchSession | null = null;
   const canPostToParent = allowSelfMessaging || win.parent !== win;
   const trustedHostOrigins = normalizeTrustedHostOrigins(hostOrigins);
-  const requiresTrustedHostOrigin = trustedHostOrigins.length > 0;
-  const runtimeCapabilities = requiresTrustedHostOrigin
+  const hasHostOriginConfiguration = hostOrigins.length > 0;
+  const hasTrustedHostOrigins = trustedHostOrigins.length > 0;
+  const runtimeCapabilities = hasTrustedHostOrigins
     ? [...iterationInspectorRuntimeCapabilities]
     : iterationInspectorRuntimeCapabilities.filter(
         (capability) => capability !== 'element_capture_v1',
@@ -3429,7 +3430,7 @@ export const createIterationInspectorRuntime = ({
     const nextParentOrigin = event.origin === 'null' ? null : event.origin;
     const isTrustedHostOrigin = isOriginTrusted(event.origin, trustedHostOrigins);
 
-    if (requiresTrustedHostOrigin && !isTrustedHostOrigin) {
+    if (hasHostOriginConfiguration && !isTrustedHostOrigin) {
       return;
     }
 
@@ -3472,7 +3473,7 @@ export const createIterationInspectorRuntime = ({
     }
 
     if (event.data.kind === 'capture_element_crop') {
-      if (!requiresTrustedHostOrigin) {
+      if (!hasTrustedHostOrigins) {
         emit({
           channel: ITERATION_INSPECTOR_CHANNEL,
           kind: 'element_crop_captured',

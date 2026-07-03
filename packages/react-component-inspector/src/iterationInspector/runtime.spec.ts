@@ -2654,4 +2654,44 @@ describe('iterationInspector runtime', () => {
 
     runtime.stop();
   });
+
+  test('fails closed when configured host origins are malformed', () => {
+    document.body.innerHTML =
+      '<main><button id="secure-button">Secure</button></main>';
+    const button = document.getElementById('secure-button');
+    expect(button).not.toBeNull();
+    assert(button instanceof HTMLButtonElement);
+    mockElementRect(button, {
+      top: 10,
+      left: 14,
+      width: 88,
+      height: 30,
+      right: 102,
+      bottom: 40,
+      x: 14,
+      y: 10,
+    });
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['localhost:4173', 'not a url'],
+    });
+    runtime.start();
+
+    enterSelectMode();
+
+    expect(runtime.isActive()).toBe(false);
+
+    button.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(getPostedSelectionMessages(postMessageSpy)).toEqual([]);
+
+    runtime.stop();
+  });
 });

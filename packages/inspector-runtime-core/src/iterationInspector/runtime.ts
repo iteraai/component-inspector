@@ -1798,9 +1798,9 @@ const getObjectPositionComponents = (objectPosition: string) => {
 
   const [first, second] = parts;
   const firstIsVertical = first === 'top' || first === 'bottom';
-  const secondIsHorizontal = second === 'left' || second === 'right';
+  const secondIsVertical = second === 'top' || second === 'bottom';
 
-  if (firstIsVertical && secondIsHorizontal) {
+  if (firstIsVertical && !secondIsVertical) {
     return [second, first] as const;
   }
 

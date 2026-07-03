@@ -690,6 +690,73 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('preserves vertical-first object-position values for image captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<img id="capture-image" style="object-fit: cover; object-position: top 25%;" />';
+    const image = document.getElementById('capture-image');
+    expect(image).not.toBeNull();
+    assert(image instanceof HTMLImageElement);
+    mockElementRect(image);
+    Object.defineProperty(image, 'complete', {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(image, 'naturalWidth', {
+      configurable: true,
+      value: 300,
+    });
+    Object.defineProperty(image, 'naturalHeight', {
+      configurable: true,
+      value: 300,
+    });
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      function toBlob(callback: BlobCallback) {
+        callback(new Blob(['image-crop'], { type: 'image/png' }));
+      },
+    );
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(image).element;
+
+    requestCapture(locator, { requestId: 'vertical-first-image-capture' });
+    await flushCapture();
+
+    expect(drawImage).toHaveBeenCalledWith(
+      image,
+      0,
+      0,
+      300,
+      100,
+      0,
+      0,
+      120,
+      40,
+    );
+    expect(getCaptureMessage(postMessageSpy, 'vertical-first-image-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'vertical-first-image-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'image',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('returns canvas_tainted when canvas export cannot produce a Blob', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML = '<canvas id="capture-canvas"></canvas>';

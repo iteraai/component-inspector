@@ -1843,6 +1843,15 @@ const hasCssEffectValue = (value: string | undefined) => {
   );
 };
 
+const hasNonZeroBoxEdge = (
+  style: CSSStyleDeclaration,
+  propertyNames: readonly (keyof CSSStyleDeclaration)[],
+) => propertyNames.some((propertyName) => {
+  const value = style[propertyName];
+
+  return typeof value === 'string' && !isZeroCssMeasurement(value);
+});
+
 const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
   const hasBorderRadius =
     !isZeroCssMeasurement(style.borderRadius) ||
@@ -1850,6 +1859,18 @@ const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
     !isZeroCssMeasurement(style.borderTopRightRadius) ||
     !isZeroCssMeasurement(style.borderBottomRightRadius) ||
     !isZeroCssMeasurement(style.borderBottomLeftRadius);
+  const hasBorderWidth = hasNonZeroBoxEdge(style, [
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+  ]);
+  const hasPadding = hasNonZeroBoxEdge(style, [
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+  ]);
   const opacity = Number.parseFloat(style.opacity || '1');
   const hasOpacityEffect = Number.isFinite(opacity) && opacity < 1;
   const maskImage = (style as CSSStyleDeclaration & { maskImage?: string })
@@ -1860,6 +1881,8 @@ const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
 
   return (
     hasBorderRadius ||
+    hasBorderWidth ||
+    hasPadding ||
     hasCssEffectValue(style.clipPath) ||
     hasCssEffectValue(style.filter) ||
     hasCssEffectValue(maskImage) ||

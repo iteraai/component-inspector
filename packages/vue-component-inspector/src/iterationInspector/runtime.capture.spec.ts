@@ -855,6 +855,55 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('uses DOM rasterization for bordered and padded image captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<img id="capture-image" style="border: 4px solid red; padding: 6px; object-fit: cover;" />';
+    const image = document.getElementById('capture-image');
+    expect(image).not.toBeNull();
+    assert(image instanceof HTMLImageElement);
+    mockElementRect(image);
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D);
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(image).element;
+
+    requestCapture(locator, { requestId: 'box-styled-image-capture' });
+    await flushCapture();
+
+    expect(getContext).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      image,
+      expect.objectContaining({
+        cacheBust: true,
+        pixelRatio: 1,
+        type: 'image/png',
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'box-styled-image-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'box-styled-image-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'dom-rasterizer',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('returns canvas_tainted when canvas export cannot produce a Blob', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML = '<canvas id="capture-canvas"></canvas>';

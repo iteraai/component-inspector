@@ -1325,6 +1325,55 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('uses DOM rasterization for object-fit canvas captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<canvas id="capture-canvas" style="width: 120px; height: 120px; object-fit: contain; object-position: right bottom;"></canvas>';
+    const canvas = document.getElementById('capture-canvas');
+    expect(canvas).not.toBeNull();
+    assert(canvas instanceof HTMLCanvasElement);
+    mockElementRect(canvas);
+    canvas.toBlob = vi.fn((callback: BlobCallback) => {
+      callback(new Blob(['native-canvas'], { type: 'image/png' }));
+    });
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(canvas).element;
+
+    requestCapture(locator, { requestId: 'object-fit-canvas-capture' });
+    await flushCapture();
+
+    expect(canvas.toBlob).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      canvas,
+      expect.objectContaining({
+        cacheBust: true,
+        pixelRatio: 1,
+        type: 'image/png',
+      }),
+    );
+    expect(
+      getCaptureMessage(postMessageSpy, 'object-fit-canvas-capture'),
+    ).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'object-fit-canvas-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'dom-rasterizer',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('uses DOM rasterization for background-styled canvas captures', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML =

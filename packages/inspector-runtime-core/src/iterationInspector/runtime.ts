@@ -1971,7 +1971,16 @@ const shouldRasterizeImageElement = (
 const shouldRasterizeCanvasElement = (
   element: HTMLCanvasElement,
   win: Window,
-) => hasStyledImageEffects(win.getComputedStyle(element));
+) => {
+  const style = win.getComputedStyle(element);
+  const objectFit = (style.objectFit || 'fill').trim().toLowerCase();
+
+  return (
+    (objectFit.length > 0 && objectFit !== 'fill') ||
+    !canUseNativeImageObjectPosition(style.objectPosition || '50% 50%') ||
+    hasStyledImageEffects(style)
+  );
+};
 
 const getImageObjectFitSize = (
   fit: string,

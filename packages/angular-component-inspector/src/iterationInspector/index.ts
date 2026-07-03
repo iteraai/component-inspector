@@ -40,6 +40,7 @@ export {
 
 type CreateIterationInspectorRuntimeArgs = {
   allowSelfMessaging?: boolean;
+  hostOrigins?: readonly string[];
   win?: Window;
   doc?: Document;
 };

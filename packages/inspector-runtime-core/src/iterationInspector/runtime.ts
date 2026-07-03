@@ -1,4 +1,5 @@
 import { toBlob as rasterizeElementToBlob } from 'html-to-image';
+import { isOriginTrusted } from '@iteraai/inspector-protocol';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
@@ -21,6 +22,7 @@ import {
 
 type CreateIterationInspectorRuntimeArgs = {
   allowSelfMessaging?: boolean;
+  hostOrigins?: readonly string[];
   win?: Window;
   doc?: Document;
 };
@@ -2225,6 +2227,7 @@ const applyPreviewOperation = (
 
 export const createIterationInspectorRuntime = ({
   allowSelfMessaging = false,
+  hostOrigins = [],
   win = window,
   doc = document,
 }: CreateIterationInspectorRuntimeArgs = {}): IterationInspectorRuntime => {
@@ -2246,6 +2249,10 @@ export const createIterationInspectorRuntime = ({
   let selectionMode: IterationInspectorSelectionMode = 'single';
   let previewPatchSession: PreviewPatchSession | null = null;
   const canPostToParent = allowSelfMessaging || win.parent !== win;
+  const trustedHostOrigins = hostOrigins
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const requiresTrustedHostOrigin = trustedHostOrigins.length > 0;
 
   type IterationInspectorDebugLogInput =
     | IterationInspectorDebugDetails
@@ -2724,6 +2731,15 @@ export const createIterationInspectorRuntime = ({
     }
 
     const nextParentOrigin = event.origin === 'null' ? null : event.origin;
+    const isTrustedHostOrigin = isOriginTrusted(event.origin, trustedHostOrigins);
+
+    if (requiresTrustedHostOrigin && !isTrustedHostOrigin) {
+      return;
+    }
+
+    if (event.data.kind === 'capture_element_crop' && !isTrustedHostOrigin) {
+      return;
+    }
 
     if (hasParentOrigin && nextParentOrigin !== parentOrigin) {
       return;

@@ -79,7 +79,11 @@ const mockElementRect = (element: Element) => {
   });
 };
 
-const givenCaptureRuntime = (): CaptureRuntimeContext => {
+const givenCaptureRuntime = (
+  options: {
+    hostOrigins?: readonly string[];
+  } = {},
+): CaptureRuntimeContext => {
   window.history.replaceState({}, '', '/capture-demo?view=inspector#target');
   document.body.innerHTML = `
     <main>
@@ -99,6 +103,7 @@ const givenCaptureRuntime = (): CaptureRuntimeContext => {
     .mockImplementation(() => undefined);
   const runtime = createIterationInspectorRuntime({
     allowSelfMessaging: true,
+    hostOrigins: options.hostOrigins ?? ['https://itera.example'],
   });
   runtime.start();
 
@@ -255,20 +260,63 @@ describe('iteration inspector runtime element capture', () => {
     await flushCapture();
 
     expect(toBlob).not.toHaveBeenCalled();
-    expect(getCaptureMessage(
-      context.postMessageSpy,
-      'opaque-origin-capture',
-    )).toEqual(
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'opaque-origin-capture'),
+    ).toBeUndefined();
+
+    context.runtime.stop();
+  });
+
+  test('does not rasterize element captures for untrusted parent origins', async () => {
+    const context = givenCaptureRuntime({
+      hostOrigins: ['https://itera.example'],
+    });
+
+    requestCapture(context.locator, {
+      origin: 'https://attacker.example',
+      requestId: 'untrusted-origin-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'untrusted-origin-capture'),
+    ).toBeUndefined();
+
+    requestCapture(context.locator, {
+      origin: 'https://itera.example',
+      requestId: 'trusted-origin-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+    expect(getCaptureMessage(context.postMessageSpy, 'trusted-origin-capture')).toEqual(
       expect.objectContaining({
         kind: 'element_crop_captured',
-        requestId: 'opaque-origin-capture',
+        requestId: 'trusted-origin-capture',
         result: expect.objectContaining({
-          status: 'failed',
-          reason: 'unsupported_target',
-          detail: 'Element capture requires a concrete parent origin.',
+          status: 'captured',
         }),
       }),
     );
+
+    context.runtime.stop();
+  });
+
+  test('does not rasterize element captures without trusted host origins', async () => {
+    const context = givenCaptureRuntime({
+      hostOrigins: [],
+    });
+
+    requestCapture(context.locator, {
+      requestId: 'missing-allowlist-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'missing-allowlist-capture'),
+    ).toBeUndefined();
 
     context.runtime.stop();
   });
@@ -463,6 +511,7 @@ describe('iteration inspector runtime element capture', () => {
       .mockImplementation(() => undefined);
     const runtime = createIterationInspectorRuntime({
       allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
     });
     runtime.start();
     const locator = buildIterationElementSelection(canvas).element;

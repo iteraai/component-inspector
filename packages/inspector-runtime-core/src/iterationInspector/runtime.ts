@@ -1925,6 +1925,7 @@ const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
     hasPadding ||
     hasVisibleBackgroundColor(style.backgroundColor) ||
     hasCssEffectValue(style.backgroundImage) ||
+    hasCssEffectValue(style.boxShadow) ||
     hasCssEffectValue(style.clipPath) ||
     hasCssEffectValue(style.filter) ||
     hasCssEffectValue(style.transform) ||

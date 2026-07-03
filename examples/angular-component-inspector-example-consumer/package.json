@@ -6,7 +6,7 @@
   "scripts": {
     "build": "ng build",
     "build:smoke": "ng build --configuration development",
-    "dev": "ng serve",
+    "dev": "ng run angular-component-inspector-example-consumer:serve",
     "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json",
     "test": "vitest run",
     "test:angular": "vitest run src/angularExampleConsumer.spec.ts src/angularBuilderSmoke.spec.ts",

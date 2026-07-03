@@ -393,6 +393,69 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('returns oversize for text captures inside oversized parents', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<p id="capture-text">Selected text inside a very large parent.</p>';
+    const target = document.getElementById('capture-text');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLParagraphElement);
+    mockElementRect(target, {
+      height: 5000,
+      left: 20,
+      top: 10,
+      width: 5000,
+    });
+    const currentTextBounds = {
+      height: 16,
+      left: 32,
+      top: 18,
+      width: 64,
+    };
+    vi.spyOn(document, 'createRange').mockReturnValue({
+      getBoundingClientRect: vi.fn(() => ({
+        ...currentTextBounds,
+        bottom: currentTextBounds.top + currentTextBounds.height,
+        right: currentTextBounds.left + currentTextBounds.width,
+        x: currentTextBounds.left,
+        y: currentTextBounds.top,
+        toJSON: () => ({}),
+      })),
+      selectNodeContents: vi.fn(),
+    } as unknown as Range);
+    const locator: IterationElementLocator = {
+      ...buildIterationElementSelection(target).element,
+      bounds: currentTextBounds,
+      role: 'text',
+    };
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+
+    requestCapture(locator, { requestId: 'text-source-oversize' });
+    await flushCapture();
+
+    expect(toCanvas).not.toHaveBeenCalled();
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(getCaptureMessage(postMessageSpy, 'text-source-oversize')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'text-source-oversize',
+        result: expect.objectContaining({
+          reason: 'oversize',
+          status: 'failed',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('suppresses async capture responses after the runtime stops', async () => {
     const context = givenCaptureRuntime();
     let resolveBlob: ((blob: Blob) => void) | undefined;

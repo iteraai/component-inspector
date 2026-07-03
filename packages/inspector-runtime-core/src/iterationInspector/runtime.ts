@@ -1580,6 +1580,26 @@ const enforceCapturePixelCap = (
   );
 };
 
+const enforceRasterSourcePixelCap = (
+  rect: IterationElementBounds,
+  scale: number,
+  win: Window,
+) => {
+  const width = Math.max(1, Math.round(rect.width * scale));
+  const height = Math.max(1, Math.round(rect.height * scale));
+  const pixelCount = width * height;
+
+  if (pixelCount <= DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS) {
+    return null;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Raster source would be ${pixelCount} pixels before cropping, exceeding the default ${DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS} pixel limit.`,
+  );
+};
+
 const withTimeout = async <T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -2341,6 +2361,14 @@ const captureElementCrop = async (
       : undefined;
   const domRasterizedRect =
     textSelectionCrop === undefined ? rect : elementRect;
+  const sourcePixelCapFailure =
+    textSelectionCrop === undefined
+      ? null
+      : enforceRasterSourcePixelCap(domRasterizedRect, dimensions.scale, win);
+
+  if (sourcePixelCapFailure !== null) {
+    return sourcePixelCapFailure;
+  }
 
   let result: IterationElementCaptureResult;
 

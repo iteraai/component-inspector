@@ -2671,6 +2671,9 @@ const findPreviewTextNode = (
 
   const walker = ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let currentNode = walker.nextNode();
+  let firstMatchingTextNode: Text | null = null;
+  let closestTextNode: Text | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
 
   while (currentNode !== null) {
     if (
@@ -2678,13 +2681,24 @@ const findPreviewTextNode = (
       !isNodeWithinOverlayRoot(currentNode) &&
       normalizeWhitespace(currentNode.textContent) === expectedText
     ) {
-      return currentNode;
+      firstMatchingTextNode ??= currentNode;
+
+      const bounds = measureTextNodeBounds(currentNode, ownerDocument);
+
+      if (bounds !== null) {
+        const distance = getBoundsDistance(bounds, locator.bounds);
+
+        if (distance < closestDistance) {
+          closestTextNode = currentNode;
+          closestDistance = distance;
+        }
+      }
     }
 
     currentNode = walker.nextNode();
   }
 
-  return null;
+  return closestTextNode ?? firstMatchingTextNode;
 };
 
 const createPreviewPatchSession = (): PreviewPatchSession => {

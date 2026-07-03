@@ -439,6 +439,100 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('uses locator bounds to resolve repeated text captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<p id="capture-text">Save <span>Save</span></p>';
+    const target = document.getElementById('capture-text');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLParagraphElement);
+    mockElementRect(target, {
+      height: 80,
+      left: 20,
+      top: 10,
+      width: 200,
+    });
+    const firstTextNode = target.firstChild;
+    const secondTextNode = target.querySelector('span')?.firstChild;
+    expect(firstTextNode).toBeInstanceOf(Text);
+    expect(secondTextNode).toBeInstanceOf(Text);
+    const firstTextBounds = {
+      height: 16,
+      left: 28,
+      top: 18,
+      width: 48,
+    };
+    const secondTextBounds = {
+      height: 16,
+      left: 104,
+      top: 18,
+      width: 48,
+    };
+    let selectedNode: Node | null = null;
+    vi.spyOn(document, 'createRange').mockReturnValue({
+      getBoundingClientRect: vi.fn(() => {
+        const bounds =
+          selectedNode === secondTextNode ? secondTextBounds : firstTextBounds;
+
+        return {
+          ...bounds,
+          bottom: bounds.top + bounds.height,
+          right: bounds.left + bounds.width,
+          x: bounds.left,
+          y: bounds.top,
+          toJSON: () => ({}),
+        };
+      }),
+      selectNodeContents: vi.fn((node: Node) => {
+        selectedNode = node;
+      }),
+    } as unknown as Range);
+    const sourceCanvas = document.createElement('canvas');
+    vi.mocked(toCanvas).mockResolvedValue(sourceCanvas);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      function toBlob(callback: BlobCallback) {
+        callback(new Blob(['repeated-text-crop'], { type: 'image/png' }));
+      },
+    );
+    const locator: IterationElementLocator = {
+      ...buildIterationElementSelection(target).element,
+      accessibleName: 'Save',
+      bounds: secondTextBounds,
+      role: 'text',
+      textPreview: 'Save',
+    };
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+
+    requestCapture(locator, { requestId: 'repeated-text-capture' });
+    await flushCapture();
+
+    expect(getCaptureMessage(postMessageSpy, 'repeated-text-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'repeated-text-capture',
+        result: expect.objectContaining({
+          height: 16,
+          method: 'dom-rasterizer',
+          rect: secondTextBounds,
+          status: 'captured',
+          width: 48,
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('captures edited preview text through the original text locator', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML = '<p id="capture-text">Original preview text</p>';

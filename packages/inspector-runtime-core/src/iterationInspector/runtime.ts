@@ -1827,6 +1827,12 @@ const getObjectPositionParts = (objectPosition: string) =>
 const canUseNativeImageObjectPosition = (objectPosition: string) =>
   getObjectPositionParts(objectPosition).length <= 2;
 
+const isHorizontalObjectPositionKeyword = (part: string) =>
+  part === 'left' || part === 'right';
+
+const isVerticalObjectPositionKeyword = (part: string) =>
+  part === 'top' || part === 'bottom';
+
 const resolveObjectPositionOffset = (
   containerSize: number,
   objectSize: number,
@@ -1847,7 +1853,7 @@ const getObjectPositionComponents = (objectPosition: string) => {
   }
 
   if (parts.length === 1) {
-    if (parts[0] === 'top' || parts[0] === 'bottom') {
+    if (isVerticalObjectPositionKeyword(parts[0])) {
       return ['50%', parts[0]] as const;
     }
 
@@ -1855,10 +1861,10 @@ const getObjectPositionComponents = (objectPosition: string) => {
   }
 
   const [first, second] = parts;
-  const firstIsVertical = first === 'top' || first === 'bottom';
-  const secondIsVertical = second === 'top' || second === 'bottom';
+  const firstIsVertical = isVerticalObjectPositionKeyword(first);
+  const secondIsHorizontal = isHorizontalObjectPositionKeyword(second);
 
-  if (firstIsVertical && !secondIsVertical) {
+  if (firstIsVertical || (first === 'center' && secondIsHorizontal)) {
     return [second, first] as const;
   }
 

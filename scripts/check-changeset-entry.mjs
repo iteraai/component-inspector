@@ -48,6 +48,55 @@ const parseChangedFilePaths = (statusLine) => {
 
 const toUniquePaths = (filePaths) => [...new Set(filePaths.filter(Boolean))];
 
+const readJsonAtRef = (ref, filePath) => {
+  try {
+    return JSON.parse(readGit(['show', `${ref}:${filePath}`]));
+  } catch {
+    return null;
+  }
+};
+
+const readJsonFile = (filePath) => {
+  try {
+    return JSON.parse(readGit(['show', `HEAD:${filePath}`]));
+  } catch {
+    return null;
+  }
+};
+
+const getChangedPackageManifests = (changedFiles) => {
+  return changedFiles.filter(
+    (filePath) =>
+      filePath.startsWith('packages/') && filePath.endsWith('/package.json'),
+  );
+};
+
+const hasVersionedReleaseOutput = (changedFiles) => {
+  const changedPackageManifests = getChangedPackageManifests(changedFiles);
+
+  if (changedPackageManifests.length === 0) {
+    return false;
+  }
+
+  return changedPackageManifests.every((packageManifestPath) => {
+    const currentManifest = readJsonFile(packageManifestPath);
+    const baseManifest = readJsonAtRef(baseRef, packageManifestPath);
+
+    if (
+      currentManifest === null ||
+      baseManifest === null ||
+      typeof currentManifest.version !== 'string' ||
+      typeof baseManifest.version !== 'string' ||
+      currentManifest.version === baseManifest.version
+    ) {
+      return false;
+    }
+
+    const packageDirectory = packageManifestPath.replace(/\/package\.json$/, '');
+    return changedFiles.includes(`${packageDirectory}/CHANGELOG.md`);
+  });
+};
+
 try {
   readGit(['rev-parse', '--verify', baseRef]);
 } catch {
@@ -84,6 +133,13 @@ const changesetFiles = changedFiles.filter(
 
 if (changesetFiles.length > 0) {
   console.log(`Found ${changesetFiles.length} changeset file(s) for package-affecting changes.`);
+  process.exit(0);
+}
+
+if (hasVersionedReleaseOutput(changedFiles)) {
+  console.log(
+    'Package-affecting changes include version and changelog output; skipping changeset file requirement.',
+  );
   process.exit(0);
 }
 

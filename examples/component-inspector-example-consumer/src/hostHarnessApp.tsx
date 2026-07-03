@@ -383,6 +383,16 @@ export const HostHarnessApp = () => {
     postToEmbedded(buildClearHoverMessage(), 'clear_hover');
   };
 
+  const clearCaptureImage = () => {
+    setCaptureImageUrl((currentUrl) => {
+      if (currentUrl !== null) {
+        URL.revokeObjectURL(currentUrl);
+      }
+
+      return null;
+    });
+  };
+
   const captureSelectedElement = () => {
     if (selectedElement === null) {
       setCaptureStatusSummary('Select an element before requesting a screenshot.');
@@ -394,6 +404,7 @@ export const HostHarnessApp = () => {
     setCaptureStatusSummary(
       `Requesting screenshot for ${selectedElement.displayText}.`,
     );
+    clearCaptureImage();
     setCaptureStatusPayload(
       prettyJson({
         requestId,
@@ -508,13 +519,7 @@ export const HostHarnessApp = () => {
     setPreviewStatusPayload('No preview edit status received yet.');
     setCaptureStatusSummary('No screenshot requested yet.');
     setCaptureStatusPayload('No capture response received yet.');
-    setCaptureImageUrl((currentUrl) => {
-      if (currentUrl !== null) {
-        URL.revokeObjectURL(currentUrl);
-      }
-
-      return null;
-    });
+    clearCaptureImage();
     setPreviewEditDraft(createEmptyPreviewEditDraft());
     setPreviewEditBaseline(createEmptyPreviewEditDraft());
     previewRevisionRef.current = 0;
@@ -619,6 +624,7 @@ export const HostHarnessApp = () => {
             setCaptureStatusSummary(
               `Screenshot failed: ${event.data.result.reason}.`,
             );
+            clearCaptureImage();
             return;
           }
 

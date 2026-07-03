@@ -60,8 +60,9 @@ const getSelectedLocator = (
 };
 
 const flushCapture = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 5; index += 1) {
+    await Promise.resolve();
+  }
 };
 
 const mockElementRect = (element: Element) => {
@@ -112,11 +113,22 @@ const givenCaptureRuntime = (): CaptureRuntimeContext => {
 const requestCapture = (
   locator: IterationElementLocator,
   options: {
+    maxHeight?: number;
     maxBytes?: number;
+    maxWidth?: number;
+    origin?: string;
+    padding?: number;
     requestId?: string;
   } = {},
 ) => {
-  const { maxBytes = 1024 * 1024, requestId = 'capture-request' } = options;
+  const {
+    maxBytes = 1024 * 1024,
+    maxHeight,
+    maxWidth,
+    origin = 'https://itera.example',
+    padding,
+    requestId = 'capture-request',
+  } = options;
 
   window.dispatchEvent(
     new MessageEvent('message', {
@@ -127,8 +139,11 @@ const requestCapture = (
         locator,
         format: 'image/png',
         maxBytes,
+        maxHeight,
+        maxWidth,
+        padding,
       },
-      origin: 'https://itera.example',
+      origin,
       source: window,
     }),
   );
@@ -155,7 +170,7 @@ const selectCaptureTarget = (target: HTMLElement) => {
   );
 };
 
-describe('angular iteration inspector runtime element capture', () => {
+describe('iteration inspector runtime element capture', () => {
   beforeEach(() => {
     vi.mocked(toBlob).mockResolvedValue(
       new Blob(['mock-png'], { type: 'image/png' }),
@@ -163,6 +178,7 @@ describe('angular iteration inspector runtime element capture', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -227,6 +243,124 @@ describe('angular iteration inspector runtime element capture', () => {
     );
 
     context.runtime.stop();
+  });
+
+  test('does not rasterize element captures for opaque parent origins', async () => {
+    const context = givenCaptureRuntime();
+
+    requestCapture(context.locator, {
+      origin: 'null',
+      requestId: 'opaque-origin-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(getCaptureMessage(
+      context.postMessageSpy,
+      'opaque-origin-capture',
+    )).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'opaque-origin-capture',
+        result: expect.objectContaining({
+          status: 'failed',
+          reason: 'unsupported_target',
+          detail: 'Element capture requires a concrete parent origin.',
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
+  test('strictly enforces max capture dimensions', async () => {
+    const context = givenCaptureRuntime();
+    vi.mocked(context.target.getBoundingClientRect).mockReturnValue({
+      top: 12,
+      left: 24,
+      width: 10_000,
+      height: 5_000,
+      right: 10_024,
+      bottom: 5_012,
+      x: 24,
+      y: 12,
+      toJSON: () => ({}),
+    });
+
+    requestCapture(context.locator, {
+      maxHeight: 3,
+      maxWidth: 4,
+      requestId: 'clamped-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledWith(
+      context.target,
+      expect.objectContaining({
+        pixelRatio: 0.0004,
+      }),
+    );
+    expect(getCaptureMessage(context.postMessageSpy, 'clamped-capture')).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          status: 'captured',
+          width: 4,
+          height: 2,
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
+  test('returns unsupported_target for padded DOM rasterizer captures', async () => {
+    const context = givenCaptureRuntime();
+
+    requestCapture(context.locator, {
+      padding: 8,
+      requestId: 'padded-dom-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(getCaptureMessage(context.postMessageSpy, 'padded-dom-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'padded-dom-capture',
+        result: expect.objectContaining({
+          status: 'failed',
+          reason: 'unsupported_target',
+          detail: 'Padding is not supported for DOM rasterizer captures in this POC.',
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
+  test('returns dom_rasterization_failed when DOM rasterization times out', async () => {
+    vi.useFakeTimers();
+    vi.mocked(toBlob).mockReturnValue(new Promise(() => {}));
+    const context = givenCaptureRuntime();
+
+    requestCapture(context.locator, { requestId: 'timeout-capture' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flushCapture();
+
+    expect(getCaptureMessage(context.postMessageSpy, 'timeout-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'timeout-capture',
+        result: expect.objectContaining({
+          status: 'failed',
+          reason: 'dom_rasterization_failed',
+          detail: 'DOM rasterization timed out after 10000ms.',
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+    vi.useRealTimers();
   });
 
   test('returns locator_not_found when the selected element cannot be re-resolved', async () => {

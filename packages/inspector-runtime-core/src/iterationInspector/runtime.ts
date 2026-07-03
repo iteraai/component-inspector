@@ -1457,6 +1457,7 @@ const resolvePreviewTargetElement = (
 };
 
 const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 10_000;
 
 const getElementCaptureFailureStatus = (
   reason: IterationElementCaptureFailure['reason'],
@@ -1502,26 +1503,54 @@ const getCaptureDimensions = (
     Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0
       ? win.devicePixelRatio
       : 1;
-  const maxWidthScale =
+  const maxPixelWidth =
     request.maxWidth === undefined || request.maxWidth <= 0
-      ? devicePixelRatio
-      : request.maxWidth / cssWidth;
-  const maxHeightScale =
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(request.maxWidth));
+  const maxPixelHeight =
     request.maxHeight === undefined || request.maxHeight <= 0
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(request.maxHeight));
+  const maxWidthScale =
+    maxPixelWidth === Number.POSITIVE_INFINITY
       ? devicePixelRatio
-      : request.maxHeight / cssHeight;
-  const scale = Math.max(
-    0.01,
-    Math.min(devicePixelRatio, maxWidthScale, maxHeightScale),
-  );
+      : maxPixelWidth / cssWidth;
+  const maxHeightScale =
+    maxPixelHeight === Number.POSITIVE_INFINITY
+      ? devicePixelRatio
+      : maxPixelHeight / cssHeight;
+  const scale = Math.min(devicePixelRatio, maxWidthScale, maxHeightScale);
+  const width = Math.max(1, Math.round(cssWidth * scale));
+  const height = Math.max(1, Math.round(cssHeight * scale));
 
   return {
     cssHeight,
     cssWidth,
-    height: Math.max(1, Math.round(cssHeight * scale)),
+    height: Math.min(height, maxPixelHeight),
     scale,
-    width: Math.max(1, Math.round(cssWidth * scale)),
+    width: Math.min(width, maxPixelWidth),
   };
+};
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  win: Window,
+): Promise<T> => {
+  let timeoutHandle: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = win.setTimeout(() => {
+      reject(new Error(`DOM rasterization timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle !== undefined) {
+      win.clearTimeout(timeoutHandle);
+    }
+  }
 };
 
 const canvasToBlob = (
@@ -1728,11 +1757,15 @@ const captureDomElement = async (
   }
 
   try {
-    const blob = await rasterizeElementToBlob(element, {
-      cacheBust: true,
-      pixelRatio: dimensions.scale,
-      type: 'image/png',
-    });
+    const blob = await withTimeout(
+      rasterizeElementToBlob(element, {
+        cacheBust: true,
+        pixelRatio: dimensions.scale,
+        type: 'image/png',
+      }),
+      DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
+      win,
+    );
 
     if (blob === null) {
       return createElementCaptureFailure(
@@ -1763,6 +1796,26 @@ const captureElementCrop = async (
     return createElementCaptureFailure(resolution.code, win, resolution.message);
   }
 
+  const elementGlobal = (resolution.element.ownerDocument.defaultView ??
+    win) as unknown as typeof globalThis;
+  const isCanvasElement =
+    resolution.element instanceof elementGlobal.HTMLCanvasElement;
+  const isImageElement = resolution.element instanceof elementGlobal.HTMLImageElement;
+  const isDomElement = resolution.element instanceof elementGlobal.HTMLElement;
+
+  if (
+    !isCanvasElement &&
+    !isImageElement &&
+    isDomElement &&
+    (request.padding ?? 0) > 0
+  ) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Padding is not supported for DOM rasterizer captures in this POC.',
+    );
+  }
+
   const rect = buildBoundsFromRect(resolution.element.getBoundingClientRect());
   const dimensions = getCaptureDimensions(rect, request, win);
 
@@ -1775,29 +1828,32 @@ const captureElementCrop = async (
   }
 
   let result: IterationElementCaptureResult;
-  const elementGlobal = (resolution.element.ownerDocument.defaultView ??
-    win) as unknown as typeof globalThis;
 
-  if (resolution.element instanceof elementGlobal.HTMLCanvasElement) {
+  if (isCanvasElement) {
     result = await captureCanvasElement(
-      resolution.element,
+      resolution.element as HTMLCanvasElement,
       rect,
       request,
       dimensions,
       doc,
       win,
     );
-  } else if (resolution.element instanceof elementGlobal.HTMLImageElement) {
+  } else if (isImageElement) {
     result = await captureImageElement(
-      resolution.element,
+      resolution.element as HTMLImageElement,
       rect,
       request,
       dimensions,
       doc,
       win,
     );
-  } else if (resolution.element instanceof elementGlobal.HTMLElement) {
-    result = await captureDomElement(resolution.element, rect, dimensions, win);
+  } else if (isDomElement) {
+    result = await captureDomElement(
+      resolution.element as HTMLElement,
+      rect,
+      dimensions,
+      win,
+    );
   } else {
     result = createElementCaptureFailure(
       'unsupported_target',
@@ -2424,6 +2480,20 @@ export const createIterationInspectorRuntime = ({
   };
 
   const captureAndEmitElementCrop = (request: ElementCaptureRequest) => {
+    if (parentOrigin === null) {
+      emit({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'element_crop_captured',
+        requestId: request.requestId,
+        result: createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Element capture requires a concrete parent origin.',
+        ),
+      });
+      return;
+    }
+
     void captureElementCrop(request, doc, win)
       .then((result) => {
         emit({

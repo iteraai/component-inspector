@@ -41,6 +41,27 @@ const getCaptureMessage = (
   );
 };
 
+const getCapturePostCall = (
+  postMessageSpy: ReturnType<typeof vi.spyOn>,
+  requestId: string,
+) => {
+  return postMessageSpy.mock.calls.find(
+    ([message]) => {
+      if (typeof message !== 'object' || message === null) {
+        return false;
+      }
+
+      const runtimeMessage = message as IterationInspectorRuntimeMessage;
+
+      return (
+        runtimeMessage.kind === 'element_crop_captured' &&
+        'requestId' in runtimeMessage &&
+        runtimeMessage.requestId === requestId
+      );
+    },
+  );
+};
+
 const getRuntimeReadyMessage = (
   postMessageSpy: ReturnType<typeof vi.spyOn>,
 ) => {
@@ -254,6 +275,34 @@ describe('iteration inspector runtime element capture', () => {
         }),
       }),
     );
+    expect(getCapturePostCall(context.postMessageSpy, 'dom-capture')?.[1]).toBe(
+      'https://itera.example',
+    );
+
+    context.runtime.stop();
+  });
+
+  test('suppresses async capture responses after the runtime stops', async () => {
+    const context = givenCaptureRuntime();
+    let resolveBlob: ((blob: Blob) => void) | undefined;
+    vi.mocked(toBlob).mockReturnValue(
+      new Promise((resolve) => {
+        resolveBlob = resolve;
+      }),
+    );
+
+    requestCapture(context.locator, { requestId: 'stopped-capture' });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+
+    context.runtime.stop();
+    resolveBlob?.(new Blob(['late-png'], { type: 'image/png' }));
+    await flushCapture();
+
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'stopped-capture'),
+    ).toBeUndefined();
 
     context.runtime.stop();
   });

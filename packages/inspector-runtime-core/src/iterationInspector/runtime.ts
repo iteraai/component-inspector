@@ -2483,6 +2483,7 @@ export const createIterationInspectorRuntime = ({
 }: CreateIterationInspectorRuntimeArgs = {}): IterationInspectorRuntime => {
   let active = false;
   let started = false;
+  let lifecycleGeneration = 0;
   let currentHover: InspectableTarget | null = null;
   let currentSelected: InspectableTarget | null = null;
   let overlay: OverlayElements | null = null;
@@ -2513,12 +2514,19 @@ export const createIterationInspectorRuntime = ({
     | IterationInspectorDebugDetails
     | (() => IterationInspectorDebugDetails);
 
-  const emit = (message: IterationInspectorRuntimeMessage) => {
+  const postToParent = (
+    message: IterationInspectorRuntimeMessage,
+    targetOrigin: string,
+  ) => {
     if (!canPostToParent) {
       return;
     }
 
-    win.parent.postMessage(message, parentOrigin ?? '*');
+    win.parent.postMessage(message, targetOrigin);
+  };
+
+  const emit = (message: IterationInspectorRuntimeMessage) => {
+    postToParent(message, parentOrigin ?? '*');
   };
 
   const emitDebugLog = (
@@ -2741,8 +2749,11 @@ export const createIterationInspectorRuntime = ({
     emitPreviewEditsStatus(revision, result);
   };
 
-  const captureAndEmitElementCrop = (request: ElementCaptureRequest) => {
-    if (parentOrigin === null) {
+  const captureAndEmitElementCrop = (
+    request: ElementCaptureRequest,
+    responseTargetOrigin: string | null,
+  ) => {
+    if (responseTargetOrigin === null) {
       emit({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'element_crop_captured',
@@ -2756,26 +2767,35 @@ export const createIterationInspectorRuntime = ({
       return;
     }
 
-    void captureElementCrop(request, doc, win)
-      .then((result) => {
-        emit({
+    const requestGeneration = lifecycleGeneration;
+    const emitCaptureResponse = (result: IterationElementCaptureResult) => {
+      if (!started || lifecycleGeneration !== requestGeneration) {
+        return;
+      }
+
+      postToParent(
+        {
           channel: ITERATION_INSPECTOR_CHANNEL,
           kind: 'element_crop_captured',
           requestId: request.requestId,
           result,
-        });
+        },
+        responseTargetOrigin,
+      );
+    };
+
+    void captureElementCrop(request, doc, win)
+      .then((result) => {
+        emitCaptureResponse(result);
       })
       .catch((error: unknown) => {
-        emit({
-          channel: ITERATION_INSPECTOR_CHANNEL,
-          kind: 'element_crop_captured',
-          requestId: request.requestId,
-          result: createElementCaptureFailure(
+        emitCaptureResponse(
+          createElementCaptureFailure(
             'dom_rasterization_failed',
             win,
             getErrorDetail(error),
           ),
-        });
+        );
       });
   };
 
@@ -3055,7 +3075,7 @@ export const createIterationInspectorRuntime = ({
         maxWidth: event.data.maxWidth,
         maxHeight: event.data.maxHeight,
         maxBytes: event.data.maxBytes,
-      });
+      }, parentOrigin);
       return;
     }
 
@@ -3331,6 +3351,7 @@ export const createIterationInspectorRuntime = ({
       }
 
       started = true;
+      lifecycleGeneration += 1;
       removePatchedHistoryListeners = patchHistory();
       doc.addEventListener('pointermove', handlePointerMove, true);
       doc.addEventListener('pointerdown', handlePointerDown, true);
@@ -3384,6 +3405,7 @@ export const createIterationInspectorRuntime = ({
       }
 
       started = false;
+      lifecycleGeneration += 1;
       active = false;
       hasParentOrigin = false;
       parentOrigin = null;

@@ -1903,6 +1903,7 @@ const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
     hasPadding ||
     hasCssEffectValue(style.clipPath) ||
     hasCssEffectValue(style.filter) ||
+    hasCssEffectValue(style.transform) ||
     hasCssEffectValue(maskImage) ||
     hasCssEffectValue(webkitMaskImage) ||
     hasOpacityEffect

@@ -94,6 +94,17 @@ const buildPreviewSyncMessage = () => {
   };
 };
 
+const buildCaptureElementCropMessage = () => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'capture_element_crop',
+    requestId: 'capture-1',
+    locator: buildRuntimeSelectionMessage().selection.element,
+    format: 'image/png',
+    maxBytes: 1024 * 1024,
+  };
+};
+
 const require = createRequire(import.meta.url);
 
 const getRuntimeExportKeys = (module: object) => Object.keys(module).sort();
@@ -236,6 +247,7 @@ const parentGuardMatrixCreated = (): GuardMatrixContext => {
         kind: 'clear_preview_edits',
         revision: 2,
       },
+      buildCaptureElementCropMessage(),
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'debug_log',
@@ -255,7 +267,7 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: '/projects/1',
-        capabilities: ['preview_edits_v1'],
+        capabilities: ['preview_edits_v1', 'element_capture_v1'],
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -295,6 +307,32 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'debug_log',
         event: 'selection_emitted',
+      },
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'element_crop_captured',
+        requestId: 'capture-1',
+        result: {
+          status: 'captured',
+          blob: new Blob(['png'], { type: 'image/png' }),
+          mimeType: 'image/png',
+          width: 120,
+          height: 40,
+          capturedAt: '2026-03-24T10:00:00.000Z',
+          method: 'dom-rasterizer',
+          rect: {
+            top: 24,
+            left: 48,
+            width: 120,
+            height: 40,
+          },
+          scrollOffset: {
+            x: 0,
+            y: 0,
+          },
+          devicePixelRatio: 1,
+          urlPath: '/projects/1',
+        },
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -364,11 +402,30 @@ const runtimeMessageGuardEvaluated = (
 };
 
 const expectCurrentParentGuardKinds = (context: GuardMatrixContext) => {
-  expect(context.results).toStrictEqual([true, true, true, true, true, false, false]);
+  expect(context.results).toStrictEqual([
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+  ]);
 };
 
 const expectCurrentRuntimeGuardKinds = (context: GuardMatrixContext) => {
-  expect(context.results).toStrictEqual([true, true, true, true, true, true, false, false]);
+  expect(context.results).toStrictEqual([
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+  ]);
 };
 
 const expectRuntimeSelectionContractCompatibility = (

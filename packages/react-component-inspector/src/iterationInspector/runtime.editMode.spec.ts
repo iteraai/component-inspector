@@ -536,7 +536,7 @@ const thenRuntimeAdvertisesPreviewEditCapability = (
       expect.objectContaining({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
-        capabilities: ['preview_edits_v1'],
+        capabilities: expect.arrayContaining(['preview_edits_v1']),
       }),
     ]),
   );

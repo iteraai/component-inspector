@@ -69,6 +69,12 @@ Initialize the bridge and iteration runtime during client startup, not from insi
 - Use `@iteraai/react-component-inspector/storybook` when a Storybook manager window needs to relay inspector traffic into the active preview iframe while the preview explicitly trusts the manager origin.
 - The exported adapter targets are `auto`, `vite`, `next`, `cra`, and `fiber`. The standard embedded bootstrap path prefers `fiber`.
 
+## Iteration Element Capture POC
+
+The iteration inspector runtime advertises `element_capture_v1` in its `runtime_ready` message. A trusted parent can request a selected element image without reading the iframe DOM by posting a `capture_element_crop` message on `itera:iteration-inspector` with a `requestId`, an `IterationElementLocator`, optional `padding`, `maxWidth`, `maxHeight`, and `maxBytes`. The runtime re-resolves the locator inside the iframe, validates `locator.urlPath` against the current path, captures a PNG `Blob`, and replies with `element_crop_captured` for the same `requestId`.
+
+Canvas and image targets use native canvas export when possible. Other `HTMLElement` targets use `html-to-image` as a small DOM rasterization dependency. This is a proof of concept: CSS fidelity depends on browser support for SVG `foreignObject`, web fonts, pseudo-elements, filters, media state, and resource loading. Cross-origin images or canvases can taint the export path and return `canvas_tainted` or `dom_rasterization_failed`. Oversized blobs return `oversize` when they exceed `maxBytes` or the default runtime limit.
+
 ## Storybook Manager Relay
 
 Use the dedicated Storybook entrypoint when the debugger loads a Storybook manager URL instead of a direct `iframe.html` story URL:

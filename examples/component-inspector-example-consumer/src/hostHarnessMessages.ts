@@ -4,10 +4,12 @@ import {
   isIterationInspectorRuntimeMessage,
   type IterationInspectorRuntimeMessage,
   type IterationPreviewTargetEdit,
+  type IterationElementLocator,
 } from '@iteraai/react-component-inspector/iterationInspector';
 
 export const exampleHostOrigin = 'http://127.0.0.1:4173';
 export const exampleEmbeddedOrigin = 'http://127.0.0.1:4174';
+export const exampleSecondaryEmbeddedOrigin = 'http://127.0.0.1:4175';
 export const exampleSessionId = 'component-inspector-example-session';
 export const exampleIterationInspectorChannel = ITERATION_INSPECTOR_CHANNEL;
 export const publishButtonDisplayName = 'PublishButton';
@@ -18,6 +20,8 @@ const defaultEmbeddedHostOrigins = encodeURIComponent(
 
 export const defaultReactEmbeddedUrl = `${exampleEmbeddedOrigin}/embedded.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
 export const defaultVueEmbeddedUrl = `${exampleEmbeddedOrigin}/embedded-vue.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
+export const defaultVitePluginEmbeddedUrl = `${exampleSecondaryEmbeddedOrigin}/embedded-plugin.html?hostOrigins=${defaultEmbeddedHostOrigins}`;
+export const defaultAngularEmbeddedUrl = `${exampleSecondaryEmbeddedOrigin}/?hostOrigins=${defaultEmbeddedHostOrigins}`;
 export const defaultEmbeddedUrl = defaultReactEmbeddedUrl;
 
 type PreviewPathUpdatedMessage = {
@@ -96,6 +100,20 @@ export const buildClearPreviewEditsMessage = (revision: number) => {
     channel: ITERATION_INSPECTOR_CHANNEL,
     kind: 'clear_preview_edits',
     revision,
+  } as const;
+};
+
+export const buildCaptureElementCropMessage = (
+  requestId: string,
+  locator: IterationElementLocator,
+) => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'capture_element_crop',
+    requestId,
+    locator,
+    format: 'image/png',
+    maxBytes: 1024 * 1024,
   } as const;
 };
 

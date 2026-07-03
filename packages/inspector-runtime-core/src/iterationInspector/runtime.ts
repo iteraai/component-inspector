@@ -1,6 +1,11 @@
+import { toBlob as rasterizeElementToBlob } from 'html-to-image';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
+  type IterationElementCaptureFailure,
+  type IterationElementCaptureFormat,
+  type IterationElementCaptureResult,
+  type IterationElementCaptureSuccess,
   type IterationEditableValues,
   IterationElementSelection,
   type IterationElementLocator,
@@ -102,6 +107,24 @@ type PreviewTargetResolution =
       code: 'locator_not_found' | 'url_mismatch';
       message: string;
     };
+
+type ElementCaptureRequest = {
+  requestId: string;
+  locator: IterationElementLocator;
+  format?: IterationElementCaptureFormat;
+  padding?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  maxBytes?: number;
+};
+
+type ElementCaptureDimensions = {
+  cssHeight: number;
+  cssWidth: number;
+  height: number;
+  scale: number;
+  width: number;
+};
 
 export type IterationInspectorRuntime = {
   start: () => void;
@@ -1433,6 +1456,359 @@ const resolvePreviewTargetElement = (
   } as const;
 };
 
+const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+
+const getElementCaptureFailureStatus = (
+  reason: IterationElementCaptureFailure['reason'],
+): IterationElementCaptureFailure['status'] => {
+  return reason === 'dom_rasterization_unavailable'
+    ? 'unavailable'
+    : 'failed';
+};
+
+const createElementCaptureFailure = (
+  reason: IterationElementCaptureFailure['reason'],
+  win: Window,
+  detail?: string,
+): IterationElementCaptureFailure => ({
+  status: getElementCaptureFailureStatus(reason),
+  reason,
+  ...(detail === undefined ? {} : { detail }),
+  urlPath: getUrlPath(win.location),
+});
+
+const getErrorDetail = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return typeof error === 'string' ? error : undefined;
+};
+
+const getCaptureDimensions = (
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  win: Window,
+): ElementCaptureDimensions | null => {
+  const padding = request.padding ?? 0;
+  const cssWidth = rect.width + padding * 2;
+  const cssHeight = rect.height + padding * 2;
+
+  if (cssWidth <= 0 || cssHeight <= 0) {
+    return null;
+  }
+
+  const devicePixelRatio =
+    Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0
+      ? win.devicePixelRatio
+      : 1;
+  const maxWidthScale =
+    request.maxWidth === undefined || request.maxWidth <= 0
+      ? devicePixelRatio
+      : request.maxWidth / cssWidth;
+  const maxHeightScale =
+    request.maxHeight === undefined || request.maxHeight <= 0
+      ? devicePixelRatio
+      : request.maxHeight / cssHeight;
+  const scale = Math.max(
+    0.01,
+    Math.min(devicePixelRatio, maxWidthScale, maxHeightScale),
+  );
+
+  return {
+    cssHeight,
+    cssWidth,
+    height: Math.max(1, Math.round(cssHeight * scale)),
+    scale,
+    width: Math.max(1, Math.round(cssWidth * scale)),
+  };
+};
+
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  mimeType: IterationElementCaptureFormat,
+) => {
+  return new Promise<Blob | null>((resolve, reject) => {
+    try {
+      if (typeof canvas.toBlob !== 'function') {
+        resolve(null);
+        return;
+      }
+
+      canvas.toBlob(resolve, mimeType);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const buildCaptureSuccess = (
+  blob: Blob,
+  method: IterationElementCaptureSuccess['method'],
+  rect: IterationElementBounds,
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+): IterationElementCaptureSuccess => ({
+  status: 'captured',
+  blob,
+  mimeType: 'image/png',
+  width: dimensions.width,
+  height: dimensions.height,
+  capturedAt: new Date().toISOString(),
+  method,
+  rect,
+  scrollOffset: {
+    x: roundMeasurement(win.scrollX),
+    y: roundMeasurement(win.scrollY),
+  },
+  devicePixelRatio:
+    Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0
+      ? win.devicePixelRatio
+      : 1,
+  urlPath: getUrlPath(win.location),
+});
+
+const enforceCaptureMaxBytes = (
+  result: IterationElementCaptureResult,
+  request: ElementCaptureRequest,
+  win: Window,
+): IterationElementCaptureResult => {
+  const maxBytes = request.maxBytes ?? DEFAULT_ELEMENT_CAPTURE_MAX_BYTES;
+
+  if (result.status !== 'captured' || result.blob.size <= maxBytes) {
+    return result;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Captured image is ${result.blob.size} bytes, exceeding ${maxBytes} bytes.`,
+  );
+};
+
+const captureCanvasElement = async (
+  element: HTMLCanvasElement,
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  dimensions: ElementCaptureDimensions,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  try {
+    const padding = request.padding ?? 0;
+    const canUseDirectCanvasBlob =
+      padding === 0 &&
+      dimensions.width === element.width &&
+      dimensions.height === element.height;
+    const exportCanvas = canUseDirectCanvasBlob
+      ? element
+      : doc.createElement('canvas');
+
+    if (!canUseDirectCanvasBlob) {
+      exportCanvas.width = dimensions.width;
+      exportCanvas.height = dimensions.height;
+      const context = exportCanvas.getContext('2d');
+
+      if (context === null) {
+        return createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Could not create a 2D canvas context for canvas capture.',
+        );
+      }
+
+      context.drawImage(
+        element,
+        0,
+        0,
+        element.width,
+        element.height,
+        Math.round(padding * dimensions.scale),
+        Math.round(padding * dimensions.scale),
+        Math.max(1, Math.round(rect.width * dimensions.scale)),
+        Math.max(1, Math.round(rect.height * dimensions.scale)),
+      );
+    }
+
+    const blob = await canvasToBlob(exportCanvas, 'image/png');
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'canvas_tainted',
+        win,
+        'Canvas export returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'canvas', rect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'canvas_tainted',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+const captureImageElement = async (
+  element: HTMLImageElement,
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  dimensions: ElementCaptureDimensions,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  if (!element.complete || element.naturalWidth <= 0 || element.naturalHeight <= 0) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Image target is not loaded.',
+    );
+  }
+
+  try {
+    const padding = request.padding ?? 0;
+    const exportCanvas = doc.createElement('canvas');
+    exportCanvas.width = dimensions.width;
+    exportCanvas.height = dimensions.height;
+    const context = exportCanvas.getContext('2d');
+
+    if (context === null) {
+      return createElementCaptureFailure(
+        'unsupported_target',
+        win,
+        'Could not create a 2D canvas context for image capture.',
+      );
+    }
+
+    context.drawImage(
+      element,
+      0,
+      0,
+      element.naturalWidth,
+      element.naturalHeight,
+      Math.round(padding * dimensions.scale),
+      Math.round(padding * dimensions.scale),
+      Math.max(1, Math.round(rect.width * dimensions.scale)),
+      Math.max(1, Math.round(rect.height * dimensions.scale)),
+    );
+
+    const blob = await canvasToBlob(exportCanvas, 'image/png');
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'canvas_tainted',
+        win,
+        'Image canvas export returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'image', rect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'canvas_tainted',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+const captureDomElement = async (
+  element: HTMLElement,
+  rect: IterationElementBounds,
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  if (typeof rasterizeElementToBlob !== 'function') {
+    return createElementCaptureFailure(
+      'dom_rasterization_unavailable',
+      win,
+      'DOM rasterizer is not available in this runtime bundle.',
+    );
+  }
+
+  try {
+    const blob = await rasterizeElementToBlob(element, {
+      cacheBust: true,
+      pixelRatio: dimensions.scale,
+      type: 'image/png',
+    });
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'dom_rasterization_failed',
+        win,
+        'DOM rasterizer returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'dom-rasterizer', rect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'dom_rasterization_failed',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+const captureElementCrop = async (
+  request: ElementCaptureRequest,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  const resolution = resolvePreviewTargetElement(request.locator, doc, win);
+
+  if ('code' in resolution) {
+    return createElementCaptureFailure(resolution.code, win, resolution.message);
+  }
+
+  const rect = buildBoundsFromRect(resolution.element.getBoundingClientRect());
+  const dimensions = getCaptureDimensions(rect, request, win);
+
+  if (dimensions === null) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Target has no measurable rendered size.',
+    );
+  }
+
+  let result: IterationElementCaptureResult;
+  const elementGlobal = (resolution.element.ownerDocument.defaultView ??
+    win) as unknown as typeof globalThis;
+
+  if (resolution.element instanceof elementGlobal.HTMLCanvasElement) {
+    result = await captureCanvasElement(
+      resolution.element,
+      rect,
+      request,
+      dimensions,
+      doc,
+      win,
+    );
+  } else if (resolution.element instanceof elementGlobal.HTMLImageElement) {
+    result = await captureImageElement(
+      resolution.element,
+      rect,
+      request,
+      dimensions,
+      doc,
+      win,
+    );
+  } else if (resolution.element instanceof elementGlobal.HTMLElement) {
+    result = await captureDomElement(resolution.element, rect, dimensions, win);
+  } else {
+    result = createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Only HTMLElement, canvas, and image targets are supported.',
+    );
+  }
+
+  return enforceCaptureMaxBytes(result, request, win);
+};
+
 const collapseEditableBoxValues = (values: readonly [string, string, string, string]) => {
   const [top, right, bottom, left] = values.map((value) => value.trim());
 
@@ -2047,6 +2423,30 @@ export const createIterationInspectorRuntime = ({
     emitPreviewEditsStatus(revision, result);
   };
 
+  const captureAndEmitElementCrop = (request: ElementCaptureRequest) => {
+    void captureElementCrop(request, doc, win)
+      .then((result) => {
+        emit({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'element_crop_captured',
+          requestId: request.requestId,
+          result,
+        });
+      })
+      .catch((error: unknown) => {
+        emit({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'element_crop_captured',
+          requestId: request.requestId,
+          result: createElementCaptureFailure(
+            'dom_rasterization_failed',
+            win,
+            getErrorDetail(error),
+          ),
+        });
+      });
+  };
+
   const emitSelection = (
     target: InspectableTarget,
     event: Event,
@@ -2289,6 +2689,19 @@ export const createIterationInspectorRuntime = ({
       emitPreviewEditsStatus(event.data.revision, {
         appliedTargetCount: 0,
         errors: [],
+      });
+      return;
+    }
+
+    if (event.data.kind === 'capture_element_crop') {
+      captureAndEmitElementCrop({
+        requestId: event.data.requestId,
+        locator: event.data.locator,
+        format: event.data.format,
+        padding: event.data.padding,
+        maxWidth: event.data.maxWidth,
+        maxHeight: event.data.maxHeight,
+        maxBytes: event.data.maxBytes,
       });
       return;
     }

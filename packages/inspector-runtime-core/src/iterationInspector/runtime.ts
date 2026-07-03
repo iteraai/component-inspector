@@ -3486,6 +3486,7 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleBeforeUnload = () => {
+    lifecycleGeneration += 1;
     clearPreviewEdits();
 
     if (!active) {

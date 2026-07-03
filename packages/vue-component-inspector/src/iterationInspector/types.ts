@@ -210,7 +210,7 @@ export type IterationInspectorRuntimeMessage =
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'runtime_ready';
       urlPath: string;
-      capabilities?: ReadonlyArray<IterationInspectorRuntimeCapability>;
+      capabilities?: ReadonlyArray<string>;
     }
   | {
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
@@ -460,15 +460,8 @@ const isIterationPreviewTargetEdit = (
 
 const isIterationInspectorRuntimeCapabilities = (
   value: unknown,
-): value is ReadonlyArray<IterationInspectorRuntimeCapability> => {
-  return (
-    isStringArray(value) &&
-    value.every((capability) =>
-      iterationInspectorRuntimeCapabilities.includes(
-        capability as IterationInspectorRuntimeCapability,
-      ),
-    )
-  );
+): value is ReadonlyArray<string> => {
+  return isStringArray(value);
 };
 
 const isIterationPreviewEditError = (

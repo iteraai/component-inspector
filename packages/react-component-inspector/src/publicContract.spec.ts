@@ -310,6 +310,12 @@ const runtimeGuardMatrixCreated = (): GuardMatrixContext => {
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'runtime_ready',
+        urlPath: '/projects/1',
+        capabilities: ['preview_edits_v1', 'future_capability_v2'],
+      },
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'element_crop_captured',
         requestId: 'capture-1',
         result: {
@@ -416,6 +422,7 @@ const expectCurrentParentGuardKinds = (context: GuardMatrixContext) => {
 
 const expectCurrentRuntimeGuardKinds = (context: GuardMatrixContext) => {
   expect(context.results).toStrictEqual([
+    true,
     true,
     true,
     true,

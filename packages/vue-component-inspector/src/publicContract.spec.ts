@@ -269,6 +269,12 @@ test('iteration inspector runtime guards accept preview edit capability and stat
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'runtime_ready',
+        urlPath: '/projects/1',
+        capabilities: ['preview_edits_v1', 'future_capability_v2'],
+      },
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'element_crop_captured',
         requestId: 'capture-1',
         result: {
@@ -302,7 +308,18 @@ test('iteration inspector runtime guards accept preview edit capability and stat
         kind: 'runtime_ready',
       },
     ].map((message) => isIterationInspectorRuntimeMessage(message)),
-  ).toStrictEqual([true, true, true, true, true, true, true, false, false]);
+  ).toStrictEqual([
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+  ]);
 });
 
 test('iteration selection runtime guards remain compatible with additive component path fields', () => {

@@ -308,7 +308,7 @@ test('iteration inspector runtime guards accept preview edit capability and stat
         capabilities: ['unknown'],
       },
     ].map((message) => isIterationInspectorRuntimeMessage(message)),
-  ).toStrictEqual([true, true, true, true, true, true, true, false]);
+  ).toStrictEqual([true, true, true, true, true, true, true, true]);
 });
 
 test('iteration inspector runtime guard rejects malformed preview edit error payloads', () => {

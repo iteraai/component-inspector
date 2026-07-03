@@ -2253,6 +2253,11 @@ export const createIterationInspectorRuntime = ({
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
   const requiresTrustedHostOrigin = trustedHostOrigins.length > 0;
+  const runtimeCapabilities = requiresTrustedHostOrigin
+    ? [...iterationInspectorRuntimeCapabilities]
+    : iterationInspectorRuntimeCapabilities.filter(
+        (capability) => capability !== 'element_capture_v1',
+      );
 
   type IterationInspectorDebugLogInput =
     | IterationInspectorDebugDetails
@@ -2737,10 +2742,6 @@ export const createIterationInspectorRuntime = ({
       return;
     }
 
-    if (event.data.kind === 'capture_element_crop' && !isTrustedHostOrigin) {
-      return;
-    }
-
     if (hasParentOrigin && nextParentOrigin !== parentOrigin) {
       return;
     }
@@ -2780,6 +2781,22 @@ export const createIterationInspectorRuntime = ({
     }
 
     if (event.data.kind === 'capture_element_crop') {
+      if (!requiresTrustedHostOrigin) {
+        emit({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'element_crop_captured',
+          requestId: event.data.requestId,
+          result: {
+            status: 'unavailable',
+            reason: 'unsupported_target',
+            detail:
+              'Element capture requires configured trusted host origins.',
+            urlPath: getUrlPath(win.location),
+          },
+        });
+        return;
+      }
+
       captureAndEmitElementCrop({
         requestId: event.data.requestId,
         locator: event.data.locator,
@@ -3108,7 +3125,7 @@ export const createIterationInspectorRuntime = ({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: getUrlPath(win.location),
-        capabilities: [...iterationInspectorRuntimeCapabilities],
+        capabilities: runtimeCapabilities,
       });
     },
     stop: () => {

@@ -41,6 +41,14 @@ const getCaptureMessage = (
   );
 };
 
+const getRuntimeReadyMessage = (
+  postMessageSpy: ReturnType<typeof vi.spyOn>,
+) => {
+  return getPostedMessages(postMessageSpy).find(
+    (message) => message.kind === 'runtime_ready',
+  );
+};
+
 const getSelectedLocator = (
   postMessageSpy: ReturnType<typeof vi.spyOn>,
 ): IterationElementLocator => {
@@ -303,10 +311,17 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
-  test('does not rasterize element captures without trusted host origins', async () => {
+  test('does not advertise or rasterize element captures without trusted host origins', async () => {
     const context = givenCaptureRuntime({
       hostOrigins: [],
     });
+
+    expect(getRuntimeReadyMessage(context.postMessageSpy)).toEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    );
 
     requestCapture(context.locator, {
       requestId: 'missing-allowlist-capture',
@@ -314,9 +329,20 @@ describe('iteration inspector runtime element capture', () => {
     await flushCapture();
 
     expect(toBlob).not.toHaveBeenCalled();
-    expect(
-      getCaptureMessage(context.postMessageSpy, 'missing-allowlist-capture'),
-    ).toBeUndefined();
+    expect(getCaptureMessage(
+      context.postMessageSpy,
+      'missing-allowlist-capture',
+    )).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'missing-allowlist-capture',
+        result: expect.objectContaining({
+          status: 'unavailable',
+          reason: 'unsupported_target',
+          detail: 'Element capture requires configured trusted host origins.',
+        }),
+      }),
+    );
 
     context.runtime.stop();
   });

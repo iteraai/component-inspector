@@ -315,6 +315,31 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
+  test('suppresses async capture responses after route changes', async () => {
+    const context = givenCaptureRuntime();
+    let resolveBlob: ((blob: Blob) => void) | undefined;
+    vi.mocked(toBlob).mockReturnValue(
+      new Promise((resolve) => {
+        resolveBlob = resolve;
+      }),
+    );
+
+    requestCapture(context.locator, { requestId: 'route-change-capture' });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+
+    window.history.pushState({}, '', '/after-capture-route');
+    resolveBlob?.(new Blob(['late-png'], { type: 'image/png' }));
+    await flushCapture();
+
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'route-change-capture'),
+    ).toBeUndefined();
+
+    context.runtime.stop();
+  });
+
   test('does not rasterize element captures for opaque parent origins', async () => {
     const context = givenCaptureRuntime();
 

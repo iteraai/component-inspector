@@ -2966,6 +2966,7 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleRouteChange = () => {
+    lifecycleGeneration += 1;
     clearPreviewEdits();
 
     if (!active) {

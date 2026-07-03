@@ -94,16 +94,24 @@ const flushCapture = async () => {
   }
 };
 
-const mockElementRect = (element: Element) => {
+const mockElementRect = (
+  element: Element,
+  overrides: Partial<DOMRect> = {},
+) => {
+  const top = overrides.top ?? 12;
+  const left = overrides.left ?? 24;
+  const width = overrides.width ?? 120;
+  const height = overrides.height ?? 40;
+
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-    top: 12,
-    left: 24,
-    width: 120,
-    height: 40,
-    right: 144,
-    bottom: 52,
-    x: 24,
-    y: 12,
+    top,
+    left,
+    width,
+    height,
+    right: overrides.right ?? left + width,
+    bottom: overrides.bottom ?? top + height,
+    x: overrides.x ?? left,
+    y: overrides.y ?? top,
     toJSON: () => ({}),
   });
 };
@@ -551,6 +559,34 @@ describe('iteration inspector runtime element capture', () => {
       expect.objectContaining({
         kind: 'element_crop_captured',
         requestId: 'oversize-capture',
+        result: expect.objectContaining({
+          status: 'failed',
+          reason: 'oversize',
+          urlPath: '/capture-demo?view=inspector#target',
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
+  test('returns oversize before rasterizing captures above the default pixel cap', async () => {
+    const context = givenCaptureRuntime();
+    mockElementRect(context.target, {
+      width: 5_000,
+      height: 5_000,
+    });
+
+    requestCapture(context.locator, {
+      requestId: 'pixel-cap-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(getCaptureMessage(context.postMessageSpy, 'pixel-cap-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'pixel-cap-capture',
         result: expect.objectContaining({
           status: 'failed',
           reason: 'oversize',

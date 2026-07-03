@@ -1459,6 +1459,7 @@ const resolvePreviewTargetElement = (
 };
 
 const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS = 16_777_216;
 const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 10_000;
 
 const getElementCaptureFailureStatus = (
@@ -1532,6 +1533,23 @@ const getCaptureDimensions = (
     scale,
     width: Math.min(width, maxPixelWidth),
   };
+};
+
+const enforceCapturePixelCap = (
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+) => {
+  const pixelCount = dimensions.width * dimensions.height;
+
+  if (pixelCount <= DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS) {
+    return null;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Captured image would be ${pixelCount} pixels, exceeding the default ${DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS} pixel limit.`,
+  );
 };
 
 const withTimeout = async <T>(
@@ -2077,6 +2095,12 @@ const captureElementCrop = async (
       win,
       'Target has no measurable rendered size.',
     );
+  }
+
+  const pixelCapFailure = enforceCapturePixelCap(dimensions, win);
+
+  if (pixelCapFailure !== null) {
+    return pixelCapFailure;
   }
 
   let result: IterationElementCaptureResult;

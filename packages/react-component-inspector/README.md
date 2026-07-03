@@ -47,19 +47,23 @@ Use the bootstrap helper when you want the standard embedded bridge behavior:
 import { bootstrapEmbeddedInspectorBridge } from "@iteraai/react-component-inspector";
 import { bootIterationInspectorRuntime } from "@iteraai/react-component-inspector/iterationInspector";
 
+const hostOrigins = ["https://app.iteradev.ai", "https://preview.iteradev.ai"];
+
 const bridge = bootstrapEmbeddedInspectorBridge({
   enabled: true,
-  hostOrigins: ["https://app.iteradev.ai", "https://preview.iteradev.ai"],
+  hostOrigins,
 });
 
-bootIterationInspectorRuntime();
+bootIterationInspectorRuntime({
+  hostOrigins,
+});
 
 window.addEventListener("beforeunload", () => {
   bridge.destroy();
 });
 ```
 
-Initialize the bridge and iteration runtime during client startup, not from inside the mounted React tree. Keep the bootstrap as early as possible so the default `fiber` path can install the inline backend hook before React hydration or `ReactDOM.createRoot(...)` makes the app interactive.
+Initialize the bridge and iteration runtime during client startup, not from inside the mounted React tree. Keep the bootstrap as early as possible so the default `fiber` path can install the inline backend hook before React hydration or `ReactDOM.createRoot(...)` makes the app interactive. Pass trusted host origins to the iteration runtime when the host needs element capture; otherwise `element_capture_v1` is not advertised.
 
 ## Package Surface Summary
 
@@ -71,7 +75,7 @@ Initialize the bridge and iteration runtime during client startup, not from insi
 
 ## Iteration Element Capture POC
 
-The iteration inspector runtime advertises `element_capture_v1` in its `runtime_ready` message. A trusted parent can request a selected element image without reading the iframe DOM by posting a `capture_element_crop` message on `itera:iteration-inspector` with a `requestId`, an `IterationElementLocator`, optional `padding`, `maxWidth`, `maxHeight`, and `maxBytes`. The runtime re-resolves the locator inside the iframe, validates `locator.urlPath` against the current path, captures a PNG `Blob`, and replies with `element_crop_captured` for the same `requestId`.
+The iteration inspector runtime advertises `element_capture_v1` in its `runtime_ready` message only when configured with trusted `hostOrigins`. A trusted parent can request a selected element image without reading the iframe DOM by posting a `capture_element_crop` message on `itera:iteration-inspector` with a `requestId`, an `IterationElementLocator`, optional `padding`, `maxWidth`, `maxHeight`, and `maxBytes`. The runtime re-resolves the locator inside the iframe, validates `locator.urlPath` against the current path, captures a PNG `Blob`, and replies with `element_crop_captured` for the same `requestId`.
 
 Canvas and image targets use native canvas export when possible. Other `HTMLElement` targets use `html-to-image` as a small DOM rasterization dependency. This is a proof of concept: CSS fidelity depends on browser support for SVG `foreignObject`, web fonts, pseudo-elements, filters, media state, and resource loading. Cross-origin images or canvases can taint the export path and return `canvas_tainted` or `dom_rasterization_failed`. Oversized blobs return `oversize` when they exceed `maxBytes` or the default runtime limit.
 

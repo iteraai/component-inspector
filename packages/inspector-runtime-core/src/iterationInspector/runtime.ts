@@ -201,6 +201,7 @@ const SEMANTIC_INSPECTABLE_ELEMENT_TAG_NAMES = new Set([
 ]);
 const INSPECTABLE_ELEMENT_TAG_NAMES = new Set([
   ...SEMANTIC_INSPECTABLE_ELEMENT_TAG_NAMES,
+  'canvas',
   'div',
   'img',
 ]);

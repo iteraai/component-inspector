@@ -1726,6 +1726,68 @@ describe('iterationInspector runtime', () => {
     runtime.stop();
   });
 
+  test('selects plain canvas elements so canvas capture can be requested', () => {
+    document.body.innerHTML =
+      '<main><div id="container"><canvas id="paint"></canvas></div></main>';
+    const canvas = document.getElementById('paint');
+    expect(canvas).not.toBeNull();
+    assert(canvas instanceof HTMLCanvasElement);
+    mockElementRect(canvas, {
+      top: 24,
+      left: 32,
+      width: 160,
+      height: 90,
+      right: 192,
+      bottom: 114,
+      x: 32,
+      y: 24,
+    });
+
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+    runtime.start();
+
+    enterSelectMode();
+
+    dispatchPointerEvent(canvas, 'pointermove', {
+      clientX: 48,
+      clientY: 40,
+    });
+
+    const clickEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+    });
+    const dispatchResult = canvas.dispatchEvent(clickEvent);
+
+    expect(dispatchResult).toBe(false);
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(getPostedSelectionMessages(postMessageSpy)).toEqual([
+      expect.objectContaining({
+        selection: expect.objectContaining({
+          displayText: '@canvas',
+          element: expect.objectContaining({
+            tagName: 'canvas',
+            role: null,
+            bounds: {
+              top: 24,
+              left: 32,
+              width: 160,
+              height: 90,
+            },
+          }),
+        }),
+      }),
+    ]);
+
+    runtime.stop();
+  });
+
   test('keeps a persistent selected highlight while showing a different hover target color', () => {
     document.body.innerHTML =
       '<main><div id="save-button"><span>Save</span></div><div id="cancel-button"><span>Cancel</span></div></main>';

@@ -1,4 +1,7 @@
-import { toBlob as rasterizeElementToBlob } from 'html-to-image';
+import {
+  toBlob as rasterizeElementToBlob,
+  toCanvas as rasterizeElementToCanvas,
+} from 'html-to-image';
 import { isOriginTrusted, normalizeOrigin } from '@iteraai/inspector-protocol';
 import {
   ITERATION_INSPECTOR_CHANNEL,
@@ -2170,27 +2173,50 @@ const captureDomElement = async (
   }
 
   try {
-    const blob = await withTimeout(
-      rasterizeElementToBlob(element, {
-        cacheBust: true,
-        ...(crop === undefined
-          ? {}
-          : {
-              canvasHeight: crop.height,
-              canvasWidth: crop.width,
-              height: rasterizedRect.height,
-              style: {
-                transform: `translate(${-crop.offsetX}px, ${-crop.offsetY}px)`,
-                transformOrigin: 'top left',
-              },
-              width: rasterizedRect.width,
+    const blob =
+      crop === undefined
+        ? await withTimeout(
+            rasterizeElementToBlob(element, {
+              cacheBust: true,
+              pixelRatio: dimensions.scale,
+              type: 'image/png',
             }),
-        pixelRatio: dimensions.scale,
-        type: 'image/png',
-      }),
-      DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
-      win,
-    );
+            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
+            win,
+          )
+        : await withTimeout(
+            rasterizeElementToCanvas(element, {
+              cacheBust: true,
+              height: rasterizedRect.height,
+              pixelRatio: dimensions.scale,
+              width: rasterizedRect.width,
+            }).then(async (sourceCanvas) => {
+              const exportCanvas = element.ownerDocument.createElement('canvas');
+              exportCanvas.width = dimensions.width;
+              exportCanvas.height = dimensions.height;
+              const context = exportCanvas.getContext('2d');
+
+              if (context === null) {
+                return null;
+              }
+
+              context.drawImage(
+                sourceCanvas,
+                Math.round(crop.offsetX * dimensions.scale),
+                Math.round(crop.offsetY * dimensions.scale),
+                Math.max(1, Math.round(crop.width * dimensions.scale)),
+                Math.max(1, Math.round(crop.height * dimensions.scale)),
+                0,
+                0,
+                dimensions.width,
+                dimensions.height,
+              );
+
+              return canvasToBlob(exportCanvas, 'image/png');
+            }),
+            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
+            win,
+          );
 
     if (blob === null) {
       return createElementCaptureFailure(
@@ -2208,6 +2234,35 @@ const captureDomElement = async (
       getErrorDetail(error),
     );
   }
+};
+
+const getCurrentTextLocatorBounds = (
+  element: Element,
+  locator: IterationElementLocator,
+  doc: Document,
+): IterationElementBounds | null => {
+  const textNode = findPreviewTextNode(element, locator);
+
+  if (textNode === null) {
+    return null;
+  }
+
+  try {
+    const range = doc.createRange();
+    range.selectNodeContents(textNode);
+
+    if (typeof range.getBoundingClientRect === 'function') {
+      const rect = range.getBoundingClientRect();
+
+      if (rect.width > 0 || rect.height > 0) {
+        return buildBoundsFromRect(rect);
+      }
+    }
+  } catch {
+    // Range measurement is best-effort; callers handle missing text bounds.
+  }
+
+  return null;
 };
 
 const captureElementCrop = async (
@@ -2244,9 +2299,20 @@ const captureElementCrop = async (
   const elementRect = buildBoundsFromRect(
     resolution.element.getBoundingClientRect(),
   );
-  const rect = request.locator.role === 'text'
-    ? request.locator.bounds
-    : elementRect;
+  const textBounds =
+    request.locator.role === 'text'
+      ? getCurrentTextLocatorBounds(resolution.element, request.locator, doc)
+      : null;
+
+  if (request.locator.role === 'text' && textBounds === null) {
+    return createElementCaptureFailure(
+      'locator_not_found',
+      win,
+      'Text target could not be re-resolved for capture.',
+    );
+  }
+
+  const rect = textBounds ?? elementRect;
   const dimensions = getCaptureDimensions(rect, request, win);
 
   if (dimensions === null) {

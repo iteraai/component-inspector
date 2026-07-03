@@ -1,4 +1,4 @@
-import { toBlob } from 'html-to-image';
+import { toBlob, toCanvas } from 'html-to-image';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   type IterationElementLocator,
@@ -11,6 +11,7 @@ import {
 
 vi.mock('html-to-image', () => ({
   toBlob: vi.fn(),
+  toCanvas: vi.fn(),
 }));
 
 type CaptureRuntimeContext = {
@@ -89,7 +90,7 @@ const getSelectedLocator = (
 };
 
 const flushCapture = async () => {
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     await Promise.resolve();
   }
 };
@@ -214,6 +215,7 @@ const selectCaptureTarget = (target: HTMLElement) => {
 
 describe('iteration inspector runtime element capture', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(toBlob).mockResolvedValue(
       new Blob(['mock-png'], { type: 'image/png' }),
     );
@@ -303,15 +305,43 @@ describe('iteration inspector runtime element capture', () => {
       top: 10,
       width: 200,
     });
-    const textBounds = {
+    const staleTextBounds = {
+      height: 12,
+      left: 72,
+      top: 46,
+      width: 40,
+    };
+    const currentTextBounds = {
       height: 16,
       left: 32,
       top: 18,
       width: 64,
     };
+    vi.spyOn(document, 'createRange').mockReturnValue({
+      getBoundingClientRect: vi.fn(() => ({
+        ...currentTextBounds,
+        bottom: currentTextBounds.top + currentTextBounds.height,
+        right: currentTextBounds.left + currentTextBounds.width,
+        x: currentTextBounds.left,
+        y: currentTextBounds.top,
+        toJSON: () => ({}),
+      })),
+      selectNodeContents: vi.fn(),
+    } as unknown as Range);
+    const sourceCanvas = document.createElement('canvas');
+    const drawImage = vi.fn();
+    vi.mocked(toCanvas).mockResolvedValue(sourceCanvas);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      function toBlob(callback: BlobCallback) {
+        callback(new Blob(['text-crop'], { type: 'image/png' }));
+      },
+    );
     const locator: IterationElementLocator = {
       ...buildIterationElementSelection(target).element,
-      bounds: textBounds,
+      bounds: staleTextBounds,
       role: 'text',
     };
     const postMessageSpy = vi
@@ -326,26 +356,36 @@ describe('iteration inspector runtime element capture', () => {
     requestCapture(locator, { requestId: 'text-capture' });
     await flushCapture();
 
-    expect(toBlob).toHaveBeenCalledWith(
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(toCanvas).toHaveBeenCalledWith(
       target,
       expect.objectContaining({
-        canvasHeight: 16,
-        canvasWidth: 64,
         height: 80,
-        style: expect.objectContaining({
-          transform: 'translate(-12px, -8px)',
-          transformOrigin: 'top left',
-        }),
+        pixelRatio: 1,
         width: 200,
       }),
+    );
+    expect(drawImage).toHaveBeenCalledWith(
+      sourceCanvas,
+      12,
+      8,
+      64,
+      16,
+      0,
+      0,
+      64,
+      16,
     );
     expect(getCaptureMessage(postMessageSpy, 'text-capture')).toEqual(
       expect.objectContaining({
         kind: 'element_crop_captured',
         requestId: 'text-capture',
         result: expect.objectContaining({
-          rect: textBounds,
+          height: 16,
+          method: 'dom-rasterizer',
+          rect: currentTextBounds,
           status: 'captured',
+          width: 64,
         }),
       }),
     );

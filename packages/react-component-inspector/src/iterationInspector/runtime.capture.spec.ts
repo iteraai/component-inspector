@@ -290,6 +290,69 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
+  test('uses text selection bounds when capturing a text locator', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<p id="capture-text">Selected text inside a larger paragraph.</p>';
+    const target = document.getElementById('capture-text');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLParagraphElement);
+    mockElementRect(target, {
+      height: 80,
+      left: 20,
+      top: 10,
+      width: 200,
+    });
+    const textBounds = {
+      height: 16,
+      left: 32,
+      top: 18,
+      width: 64,
+    };
+    const locator: IterationElementLocator = {
+      ...buildIterationElementSelection(target).element,
+      bounds: textBounds,
+      role: 'text',
+    };
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+
+    requestCapture(locator, { requestId: 'text-capture' });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({
+        canvasHeight: 16,
+        canvasWidth: 64,
+        height: 16,
+        style: expect.objectContaining({
+          transform: 'translate(-12px, -8px)',
+          transformOrigin: 'top left',
+        }),
+        width: 64,
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'text-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'text-capture',
+        result: expect.objectContaining({
+          rect: textBounds,
+          status: 'captured',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('suppresses async capture responses after the runtime stops', async () => {
     const context = givenCaptureRuntime();
     let resolveBlob: ((blob: Blob) => void) | undefined;

@@ -128,6 +128,11 @@ type ElementCaptureDimensions = {
   width: number;
 };
 
+type DomRasterizationCrop = {
+  offsetX: number;
+  offsetY: number;
+};
+
 export type IterationInspectorRuntime = {
   start: () => void;
   stop: () => void;
@@ -2151,6 +2156,7 @@ const captureDomElement = async (
   rect: IterationElementBounds,
   dimensions: ElementCaptureDimensions,
   win: Window,
+  crop?: DomRasterizationCrop,
 ): Promise<IterationElementCaptureResult> => {
   if (typeof rasterizeElementToBlob !== 'function') {
     return createElementCaptureFailure(
@@ -2164,6 +2170,18 @@ const captureDomElement = async (
     const blob = await withTimeout(
       rasterizeElementToBlob(element, {
         cacheBust: true,
+        ...(crop === undefined
+          ? {}
+          : {
+              canvasHeight: rect.height,
+              canvasWidth: rect.width,
+              height: rect.height,
+              style: {
+                transform: `translate(${-crop.offsetX}px, ${-crop.offsetY}px)`,
+                transformOrigin: 'top left',
+              },
+              width: rect.width,
+            }),
         pixelRatio: dimensions.scale,
         type: 'image/png',
       }),
@@ -2220,7 +2238,12 @@ const captureElementCrop = async (
     );
   }
 
-  const rect = buildBoundsFromRect(resolution.element.getBoundingClientRect());
+  const elementRect = buildBoundsFromRect(
+    resolution.element.getBoundingClientRect(),
+  );
+  const rect = request.locator.role === 'text'
+    ? request.locator.bounds
+    : elementRect;
   const dimensions = getCaptureDimensions(rect, request, win);
 
   if (dimensions === null) {
@@ -2237,6 +2260,14 @@ const captureElementCrop = async (
     return pixelCapFailure;
   }
 
+  const textSelectionCrop =
+    request.locator.role === 'text'
+      ? {
+          offsetX: rect.left - elementRect.left,
+          offsetY: rect.top - elementRect.top,
+        }
+      : undefined;
+
   let result: IterationElementCaptureResult;
 
   if (isCanvasElement) {
@@ -2250,7 +2281,13 @@ const captureElementCrop = async (
           'Padding is not supported for DOM rasterizer captures in this POC.',
         );
       } else {
-        result = await captureDomElement(canvasElement, rect, dimensions, win);
+        result = await captureDomElement(
+          canvasElement,
+          rect,
+          dimensions,
+          win,
+          textSelectionCrop,
+        );
       }
     } else {
       result = await captureCanvasElement(
@@ -2273,7 +2310,13 @@ const captureElementCrop = async (
           'Padding is not supported for DOM rasterizer captures in this POC.',
         );
       } else {
-        result = await captureDomElement(imageElement, rect, dimensions, win);
+        result = await captureDomElement(
+          imageElement,
+          rect,
+          dimensions,
+          win,
+          textSelectionCrop,
+        );
       }
     } else {
       result = await captureImageElement(
@@ -2291,6 +2334,7 @@ const captureElementCrop = async (
       rect,
       dimensions,
       win,
+      textSelectionCrop,
     );
   } else {
     result = createElementCaptureFailure(

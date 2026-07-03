@@ -1766,6 +1766,16 @@ const parseObjectPositionComponent = (
   return { type: 'percent' as const, value: 0.5 };
 };
 
+const getObjectPositionParts = (objectPosition: string) =>
+  objectPosition
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((part) => part.length > 0);
+
+const canUseNativeImageObjectPosition = (objectPosition: string) =>
+  getObjectPositionParts(objectPosition).length <= 2;
+
 const resolveObjectPositionOffset = (
   containerSize: number,
   objectSize: number,
@@ -1779,10 +1789,7 @@ const resolveObjectPositionOffset = (
 };
 
 const getObjectPositionComponents = (objectPosition: string) => {
-  const parts = objectPosition
-    .trim()
-    .split(/\s+/)
-    .filter((part) => part.length > 0);
+  const parts = getObjectPositionParts(objectPosition);
 
   if (parts.length === 0) {
     return ['50%', '50%'] as const;
@@ -1805,6 +1812,72 @@ const getObjectPositionComponents = (objectPosition: string) => {
   }
 
   return [first, second] as const;
+};
+
+const isZeroCssMeasurement = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === undefined || normalized.length === 0) {
+    return true;
+  }
+
+  return normalized.split(/\s+/).every((part) => {
+    if (part === '0') {
+      return true;
+    }
+
+    const numericValue = Number.parseFloat(part);
+
+    return Number.isFinite(numericValue) && numericValue === 0;
+  });
+};
+
+const hasCssEffectValue = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  return (
+    normalized !== undefined &&
+    normalized.length > 0 &&
+    normalized !== 'none' &&
+    normalized !== 'normal'
+  );
+};
+
+const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
+  const hasBorderRadius =
+    !isZeroCssMeasurement(style.borderRadius) ||
+    !isZeroCssMeasurement(style.borderTopLeftRadius) ||
+    !isZeroCssMeasurement(style.borderTopRightRadius) ||
+    !isZeroCssMeasurement(style.borderBottomRightRadius) ||
+    !isZeroCssMeasurement(style.borderBottomLeftRadius);
+  const opacity = Number.parseFloat(style.opacity || '1');
+  const hasOpacityEffect = Number.isFinite(opacity) && opacity < 1;
+  const maskImage = (style as CSSStyleDeclaration & { maskImage?: string })
+    .maskImage;
+  const webkitMaskImage = (
+    style as CSSStyleDeclaration & { webkitMaskImage?: string }
+  ).webkitMaskImage;
+
+  return (
+    hasBorderRadius ||
+    hasCssEffectValue(style.clipPath) ||
+    hasCssEffectValue(style.filter) ||
+    hasCssEffectValue(maskImage) ||
+    hasCssEffectValue(webkitMaskImage) ||
+    hasOpacityEffect
+  );
+};
+
+const shouldRasterizeImageElement = (
+  element: HTMLImageElement,
+  win: Window,
+) => {
+  const style = win.getComputedStyle(element);
+
+  return (
+    !canUseNativeImageObjectPosition(style.objectPosition || '50% 50%') ||
+    hasStyledImageEffects(style)
+  );
 };
 
 const getImageObjectFitSize = (
@@ -2115,14 +2188,28 @@ const captureElementCrop = async (
       win,
     );
   } else if (isImageElement) {
-    result = await captureImageElement(
-      resolution.element as HTMLImageElement,
-      rect,
-      request,
-      dimensions,
-      doc,
-      win,
-    );
+    const imageElement = resolution.element as HTMLImageElement;
+
+    if (shouldRasterizeImageElement(imageElement, win)) {
+      if ((request.padding ?? 0) > 0) {
+        result = createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Padding is not supported for DOM rasterizer captures in this POC.',
+        );
+      } else {
+        result = await captureDomElement(imageElement, rect, dimensions, win);
+      }
+    } else {
+      result = await captureImageElement(
+        imageElement,
+        rect,
+        request,
+        dimensions,
+        doc,
+        win,
+      );
+    }
   } else if (isDomElement) {
     result = await captureDomElement(
       resolution.element as HTMLElement,

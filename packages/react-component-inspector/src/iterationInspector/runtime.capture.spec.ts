@@ -757,6 +757,104 @@ describe('iteration inspector runtime element capture', () => {
     runtime.stop();
   });
 
+  test('uses DOM rasterization for edge-offset object-position image captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<img id="capture-image" style="object-fit: cover; object-position: right 10px bottom 20px;" />';
+    const image = document.getElementById('capture-image');
+    expect(image).not.toBeNull();
+    assert(image instanceof HTMLImageElement);
+    mockElementRect(image);
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D);
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(image).element;
+
+    requestCapture(locator, { requestId: 'edge-offset-image-capture' });
+    await flushCapture();
+
+    expect(getContext).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      image,
+      expect.objectContaining({
+        cacheBust: true,
+        pixelRatio: 1,
+        type: 'image/png',
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'edge-offset-image-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'edge-offset-image-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'dom-rasterizer',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
+  test('uses DOM rasterization for clipped image captures', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML =
+      '<img id="capture-image" style="border-radius: 12px; object-fit: cover; object-position: 25% 75%;" />';
+    const image = document.getElementById('capture-image');
+    expect(image).not.toBeNull();
+    assert(image instanceof HTMLImageElement);
+    mockElementRect(image);
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D);
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+    const locator = buildIterationElementSelection(image).element;
+
+    requestCapture(locator, { requestId: 'clipped-image-capture' });
+    await flushCapture();
+
+    expect(getContext).not.toHaveBeenCalled();
+    expect(toBlob).toHaveBeenCalledWith(
+      image,
+      expect.objectContaining({
+        cacheBust: true,
+        pixelRatio: 1,
+        type: 'image/png',
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'clipped-image-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'clipped-image-capture',
+        result: expect.objectContaining({
+          status: 'captured',
+          method: 'dom-rasterizer',
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
   test('returns canvas_tainted when canvas export cannot produce a Blob', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML = '<canvas id="capture-canvas"></canvas>';

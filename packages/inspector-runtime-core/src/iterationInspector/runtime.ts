@@ -2209,8 +2209,10 @@ const captureDomElement = async (
         ? await withTimeout(
             rasterizeElementToBlob(element, {
               cacheBust: true,
+              height: rasterizedRect.height,
               pixelRatio: dimensions.scale,
               type: 'image/png',
+              width: rasterizedRect.width,
             }),
             DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
             win,
@@ -2274,10 +2276,17 @@ const getCurrentTextLocatorBounds = (
 ): IterationElementBounds | null => {
   const textNode = findPreviewTextNode(element, locator);
 
-  if (textNode === null) {
-    return null;
+  if (textNode !== null) {
+    return measureTextNodeBounds(textNode, doc);
   }
 
+  return getClosestTextLocatorBounds(element, locator, doc);
+};
+
+const measureTextNodeBounds = (
+  textNode: Text,
+  doc: Document,
+): IterationElementBounds | null => {
   try {
     const range = doc.createRange();
     range.selectNodeContents(textNode);
@@ -2294,6 +2303,60 @@ const getCurrentTextLocatorBounds = (
   }
 
   return null;
+};
+
+const getBoundsDistance = (
+  first: IterationElementBounds,
+  second: IterationElementBounds,
+) => {
+  const firstCenterX = first.left + first.width / 2;
+  const firstCenterY = first.top + first.height / 2;
+  const secondCenterX = second.left + second.width / 2;
+  const secondCenterY = second.top + second.height / 2;
+  const deltaX = firstCenterX - secondCenterX;
+  const deltaY = firstCenterY - secondCenterY;
+
+  return deltaX * deltaX + deltaY * deltaY;
+};
+
+const getClosestTextLocatorBounds = (
+  element: Element,
+  locator: IterationElementLocator,
+  doc: Document,
+): IterationElementBounds | null => {
+  const ownerDocument = element.ownerDocument;
+
+  if (ownerDocument === null) {
+    return null;
+  }
+
+  const walker = ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let currentNode = walker.nextNode();
+  let closestBounds: IterationElementBounds | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  while (currentNode !== null) {
+    if (
+      currentNode instanceof Text &&
+      !isNodeWithinOverlayRoot(currentNode) &&
+      normalizeWhitespace(currentNode.textContent) !== null
+    ) {
+      const bounds = measureTextNodeBounds(currentNode, doc);
+
+      if (bounds !== null) {
+        const distance = getBoundsDistance(bounds, locator.bounds);
+
+        if (distance < closestDistance) {
+          closestBounds = bounds;
+          closestDistance = distance;
+        }
+      }
+    }
+
+    currentNode = walker.nextNode();
+  }
+
+  return closestBounds;
 };
 
 const captureElementCrop = async (

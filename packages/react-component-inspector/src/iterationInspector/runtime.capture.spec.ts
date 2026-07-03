@@ -292,6 +292,52 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
+  test('sizes DOM rasterization from the measured capture rect', async () => {
+    const context = givenCaptureRuntime();
+    vi.mocked(context.target.getBoundingClientRect).mockReturnValue({
+      top: 12,
+      left: 24,
+      width: 240,
+      height: 80,
+      right: 264,
+      bottom: 92,
+      x: 24,
+      y: 12,
+      toJSON: () => ({}),
+    });
+
+    requestCapture(context.locator, { requestId: 'measured-dom-capture' });
+    await flushCapture();
+
+    expect(toBlob).toHaveBeenCalledWith(
+      context.target,
+      expect.objectContaining({
+        cacheBust: true,
+        height: 80,
+        pixelRatio: 1,
+        type: 'image/png',
+        width: 240,
+      }),
+    );
+    expect(
+      getCaptureMessage(context.postMessageSpy, 'measured-dom-capture'),
+    ).toEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          height: 80,
+          rect: expect.objectContaining({
+            height: 80,
+            width: 240,
+          }),
+          status: 'captured',
+          width: 240,
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
   test('uses text selection bounds when capturing a text locator', async () => {
     window.history.replaceState({}, '', '/capture-demo');
     document.body.innerHTML =
@@ -386,6 +432,112 @@ describe('iteration inspector runtime element capture', () => {
           rect: currentTextBounds,
           status: 'captured',
           width: 64,
+        }),
+      }),
+    );
+
+    runtime.stop();
+  });
+
+  test('captures edited preview text through the original text locator', async () => {
+    window.history.replaceState({}, '', '/capture-demo');
+    document.body.innerHTML = '<p id="capture-text">Original preview text</p>';
+    const target = document.getElementById('capture-text');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLParagraphElement);
+    mockElementRect(target, {
+      height: 80,
+      left: 20,
+      top: 10,
+      width: 200,
+    });
+    const currentTextBounds = {
+      height: 18,
+      left: 36,
+      top: 22,
+      width: 104,
+    };
+    vi.spyOn(document, 'createRange').mockReturnValue({
+      getBoundingClientRect: vi.fn(() => ({
+        ...currentTextBounds,
+        bottom: currentTextBounds.top + currentTextBounds.height,
+        right: currentTextBounds.left + currentTextBounds.width,
+        x: currentTextBounds.left,
+        y: currentTextBounds.top,
+        toJSON: () => ({}),
+      })),
+      selectNodeContents: vi.fn(),
+    } as unknown as Range);
+    const sourceCanvas = document.createElement('canvas');
+    vi.mocked(toCanvas).mockResolvedValue(sourceCanvas);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+      function toBlob(callback: BlobCallback) {
+        callback(new Blob(['edited-text-crop'], { type: 'image/png' }));
+      },
+    );
+    const locator: IterationElementLocator = {
+      ...buildIterationElementSelection(target).element,
+      role: 'text',
+    };
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const runtime = createIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://itera.example'],
+    });
+    runtime.start();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'sync_preview_edits',
+          revision: 1,
+          targets: [
+            {
+              locator,
+              operations: [
+                {
+                  fieldId: 'textContent',
+                  value: 'Edited preview text',
+                  valueType: 'string',
+                },
+              ],
+            },
+          ],
+        },
+        origin: 'https://itera.example',
+        source: window,
+      }),
+    );
+
+    expect(target.textContent).toBe('Edited preview text');
+
+    requestCapture(locator, { requestId: 'edited-text-capture' });
+    await flushCapture();
+
+    expect(toCanvas).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({
+        height: 80,
+        pixelRatio: 1,
+        width: 200,
+      }),
+    );
+    expect(getCaptureMessage(postMessageSpy, 'edited-text-capture')).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'edited-text-capture',
+        result: expect.objectContaining({
+          height: 18,
+          method: 'dom-rasterizer',
+          rect: currentTextBounds,
+          status: 'captured',
+          width: 104,
         }),
       }),
     );

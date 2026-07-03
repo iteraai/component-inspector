@@ -429,6 +429,42 @@ describe('iteration inspector runtime element capture', () => {
     context.runtime.stop();
   });
 
+  test('does not advertise element capture for unnormalizable host origins', async () => {
+    const context = givenCaptureRuntime({
+      hostOrigins: ['localhost:4173', 'not a url'],
+    });
+
+    expect(getRuntimeReadyMessage(context.postMessageSpy)).toEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    );
+
+    requestCapture(context.locator, {
+      requestId: 'invalid-allowlist-capture',
+    });
+    await flushCapture();
+
+    expect(toBlob).not.toHaveBeenCalled();
+    expect(getCaptureMessage(
+      context.postMessageSpy,
+      'invalid-allowlist-capture',
+    )).toEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'invalid-allowlist-capture',
+        result: expect.objectContaining({
+          status: 'unavailable',
+          reason: 'unsupported_target',
+          detail: 'Element capture requires configured trusted host origins.',
+        }),
+      }),
+    );
+
+    context.runtime.stop();
+  });
+
   test('strictly enforces max capture dimensions', async () => {
     const context = givenCaptureRuntime();
     vi.mocked(context.target.getBoundingClientRect).mockReturnValue({

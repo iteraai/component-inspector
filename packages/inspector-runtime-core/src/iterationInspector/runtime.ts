@@ -1,5 +1,5 @@
 import { toBlob as rasterizeElementToBlob } from 'html-to-image';
-import { isOriginTrusted } from '@iteraai/inspector-protocol';
+import { isOriginTrusted, normalizeOrigin } from '@iteraai/inspector-protocol';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
@@ -1462,6 +1462,24 @@ const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS = 16_777_216;
 const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 10_000;
 
+const normalizeTrustedHostOrigins = (origins: readonly string[]) => {
+  const normalizedOrigins = new Set<string>();
+
+  for (const origin of origins) {
+    const normalizedOrigin = normalizeOrigin(origin.trim());
+
+    if (
+      normalizedOrigin !== undefined &&
+      normalizedOrigin !== 'null' &&
+      normalizedOrigin.length > 0
+    ) {
+      normalizedOrigins.add(normalizedOrigin);
+    }
+  }
+
+  return [...normalizedOrigins];
+};
+
 const getElementCaptureFailureStatus = (
   reason: IterationElementCaptureFailure['reason'],
 ): IterationElementCaptureFailure['status'] => {
@@ -2634,9 +2652,7 @@ export const createIterationInspectorRuntime = ({
   let selectionMode: IterationInspectorSelectionMode = 'single';
   let previewPatchSession: PreviewPatchSession | null = null;
   const canPostToParent = allowSelfMessaging || win.parent !== win;
-  const trustedHostOrigins = hostOrigins
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+  const trustedHostOrigins = normalizeTrustedHostOrigins(hostOrigins);
   const requiresTrustedHostOrigin = trustedHostOrigins.length > 0;
   const runtimeCapabilities = requiresTrustedHostOrigin
     ? [...iterationInspectorRuntimeCapabilities]

@@ -30,6 +30,7 @@ export const EmbeddedHarnessApp = ({
     });
     const runtime = bootIterationInspectorRuntime({
       allowSelfMessaging,
+      hostOrigins: resolvedHostOrigins,
     });
 
     return () => {

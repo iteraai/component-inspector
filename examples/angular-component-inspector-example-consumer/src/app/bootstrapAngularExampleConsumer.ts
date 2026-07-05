@@ -62,12 +62,15 @@ export const bootstrapAngularExampleConsumer = async (
   options: BootstrapAngularExampleConsumerOptions = {},
 ): Promise<AngularExampleConsumerHandle> => {
   const { created, hostElement } = ensureAppHost(document);
+  const hostOrigins =
+    options.hostOrigins ?? resolveHostOrigins(window.location.search);
   const bridge = bootstrapEmbeddedInspectorBridge({
     enabled: true,
-    hostOrigins: options.hostOrigins ?? resolveHostOrigins(window.location.search),
+    hostOrigins,
   });
   const iterationRuntime = bootIterationInspectorRuntime({
     allowSelfMessaging: options.allowSelfMessaging ?? false,
+    hostOrigins,
   });
   const appRef = await bootstrapApplication(ExampleEmbeddedHarness);
 

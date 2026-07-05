@@ -95,6 +95,17 @@ const buildPreviewSyncMessage = () => {
   };
 };
 
+const buildCaptureElementCropMessage = () => {
+  return {
+    channel: ITERATION_INSPECTOR_CHANNEL,
+    kind: 'capture_element_crop',
+    requestId: 'capture-1',
+    locator: buildRuntimeSelectionMessage().selection.element,
+    format: 'image/png',
+    maxBytes: 1024 * 1024,
+  };
+};
+
 const require = createRequire(import.meta.url);
 
 const getRuntimeExportKeys = (module: object) => Object.keys(module).sort();
@@ -207,12 +218,13 @@ test('iteration inspector parent message guards accept preview edit commands', (
         kind: 'clear_preview_edits',
         revision: 2,
       },
+      buildCaptureElementCropMessage(),
       {
         channel: 'other-channel',
         kind: 'enter_select_mode',
       },
     ].map((message) => isIterationInspectorParentMessage(message)),
-  ).toStrictEqual([true, true, true, true, true, false]);
+  ).toStrictEqual([true, true, true, true, true, true, false]);
 });
 
 test('iteration inspector runtime guards accept preview edit capability and status payloads', () => {
@@ -222,7 +234,7 @@ test('iteration inspector runtime guards accept preview edit capability and stat
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: '/projects/1',
-        capabilities: ['preview_edits_v1'],
+        capabilities: ['preview_edits_v1', 'element_capture_v1'],
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
@@ -265,12 +277,38 @@ test('iteration inspector runtime guards accept preview edit capability and stat
       },
       {
         channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'element_crop_captured',
+        requestId: 'capture-1',
+        result: {
+          status: 'captured',
+          blob: new Blob(['png'], { type: 'image/png' }),
+          mimeType: 'image/png',
+          width: 120,
+          height: 40,
+          capturedAt: '2026-03-24T10:00:00.000Z',
+          method: 'dom-rasterizer',
+          rect: {
+            top: 24,
+            left: 48,
+            width: 120,
+            height: 40,
+          },
+          scrollOffset: {
+            x: 0,
+            y: 0,
+          },
+          devicePixelRatio: 1,
+          urlPath: '/projects/1',
+        },
+      },
+      {
+        channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: '/projects/1',
         capabilities: ['unknown'],
       },
     ].map((message) => isIterationInspectorRuntimeMessage(message)),
-  ).toStrictEqual([true, true, true, true, true, true, true]);
+  ).toStrictEqual([true, true, true, true, true, true, true, true]);
 });
 
 test('iteration inspector runtime guard rejects malformed preview edit error payloads', () => {

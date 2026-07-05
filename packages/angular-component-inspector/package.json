@@ -1,6 +1,6 @@
 {
   "name": "@iteraai/angular-component-inspector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "description": "Browser bridge, iteration runtime, and Angular CLI source metadata builders for the Itera Angular component inspector SDK.",
@@ -56,7 +56,8 @@
     "lint:ci": "eslint . --max-warnings=0"
   },
   "dependencies": {
-    "@iteraai/inspector-protocol": "0.1.0"
+    "@iteraai/inspector-protocol": "0.1.0",
+    "html-to-image": "^1.11.13"
   },
   "peerDependencies": {
     "@angular/core": "^18.0.0 || ^19.0.0 || ^20.0.0 || ^21.0.0"

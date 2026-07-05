@@ -203,6 +203,11 @@ describe('React inspector Vite client runtime', () => {
     expect(
       inspectorRuntimeMocks.bootIterationInspectorRuntime,
     ).toHaveBeenCalledTimes(1);
+    expect(
+      inspectorRuntimeMocks.bootIterationInspectorRuntime,
+    ).toHaveBeenCalledWith({
+      hostOrigins: ['https://app.iteradev.ai'],
+    });
     expect(fakeWindow.__listenerCount('beforeunload')).toBe(1);
 
     stop();

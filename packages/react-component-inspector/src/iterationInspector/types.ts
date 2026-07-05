@@ -12,6 +12,8 @@ export type IterationScrollOffset = {
   y: number;
 };
 
+export type IterationElementTargetKind = 'element' | 'text';
+
 export type IterationElementLocator = {
   urlPath: string;
   cssSelector: string;
@@ -25,6 +27,7 @@ export type IterationElementLocator = {
   bounds: IterationElementBounds;
   scrollOffset: IterationScrollOffset;
   capturedAt: string;
+  targetKind?: IterationElementTargetKind;
   componentPath?: ReadonlyArray<string>;
   // Legacy compatibility alias for existing React consumers.
   reactComponentPath?: ReadonlyArray<string>;
@@ -47,6 +50,7 @@ export type IterationInspectorDebugDetails = Record<string, unknown>;
 
 export const iterationInspectorRuntimeCapabilities = [
   'preview_edits_v1',
+  'element_capture_v1',
 ] as const;
 
 export type IterationInspectorRuntimeCapability =
@@ -68,6 +72,51 @@ export type IterationPreviewTargetEdit = {
   locator: IterationElementLocator;
   operations: ReadonlyArray<IterationPreviewEditOperation>;
 };
+
+export type IterationElementCaptureFormat = 'image/png';
+
+export type IterationElementCaptureMethod =
+  | 'canvas'
+  | 'image'
+  | 'dom-rasterizer';
+
+export const iterationElementCaptureFailureReasons = [
+  'url_mismatch',
+  'locator_not_found',
+  'canvas_tainted',
+  'dom_rasterization_unavailable',
+  'dom_rasterization_failed',
+  'oversize',
+  'unsupported_target',
+] as const;
+
+export type IterationElementCaptureFailureReason =
+  (typeof iterationElementCaptureFailureReasons)[number];
+
+export type IterationElementCaptureSuccess = {
+  status: 'captured';
+  blob: Blob;
+  mimeType: IterationElementCaptureFormat;
+  width: number;
+  height: number;
+  capturedAt: string;
+  method: IterationElementCaptureMethod;
+  rect: IterationElementBounds;
+  scrollOffset: IterationScrollOffset;
+  devicePixelRatio: number;
+  urlPath: string;
+};
+
+export type IterationElementCaptureFailure = {
+  status: 'failed' | 'unavailable';
+  reason: IterationElementCaptureFailureReason;
+  detail?: string;
+  urlPath?: string;
+};
+
+export type IterationElementCaptureResult =
+  | IterationElementCaptureSuccess
+  | IterationElementCaptureFailure;
 
 export const iterationPreviewEditErrorCodes = [
   'invalid_value',
@@ -140,6 +189,17 @@ export type IterationInspectorParentMessage =
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'clear_preview_edits';
       revision: number;
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'capture_element_crop';
+      requestId: string;
+      locator: IterationElementLocator;
+      format?: IterationElementCaptureFormat;
+      padding?: number;
+      maxWidth?: number;
+      maxHeight?: number;
+      maxBytes?: number;
     } & IterationInspectorParentMessageDebugConfig);
 
 export type IterationInspectorRuntimeMessage =
@@ -147,7 +207,7 @@ export type IterationInspectorRuntimeMessage =
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'runtime_ready';
       urlPath: string;
-      capabilities?: ReadonlyArray<IterationInspectorRuntimeCapability>;
+      capabilities?: ReadonlyArray<string>;
     }
   | {
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
@@ -170,6 +230,12 @@ export type IterationInspectorRuntimeMessage =
       revision: number;
       appliedTargetCount: number;
       errors?: ReadonlyArray<IterationPreviewEditError>;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'element_crop_captured';
+      requestId: string;
+      result: IterationElementCaptureResult;
     }
   | {
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
@@ -216,6 +282,63 @@ const isIterationElementBounds = (
   );
 };
 
+const isIterationElementCaptureFormat = (
+  value: unknown,
+): value is IterationElementCaptureFormat => value === 'image/png';
+
+const isIterationElementCaptureMethod = (
+  value: unknown,
+): value is IterationElementCaptureMethod =>
+  value === 'canvas' || value === 'image' || value === 'dom-rasterizer';
+
+const isBlobLike = (value: unknown): value is Blob => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.size === 'number' &&
+    typeof value.type === 'string' &&
+    typeof value.slice === 'function'
+  );
+};
+
+const isIterationElementCaptureResult = (
+  value: unknown,
+): value is IterationElementCaptureResult => {
+  if (!isRecord(value) || typeof value.status !== 'string') {
+    return false;
+  }
+
+  if (value.status === 'captured') {
+    return (
+      isBlobLike(value.blob) &&
+      isIterationElementCaptureFormat(value.mimeType) &&
+      isFiniteNumber(value.width) &&
+      isFiniteNumber(value.height) &&
+      typeof value.capturedAt === 'string' &&
+      isIterationElementCaptureMethod(value.method) &&
+      isIterationElementBounds(value.rect) &&
+      isIterationScrollOffset(value.scrollOffset) &&
+      isFiniteNumber(value.devicePixelRatio) &&
+      typeof value.urlPath === 'string'
+    );
+  }
+
+  if (value.status !== 'failed' && value.status !== 'unavailable') {
+    return false;
+  }
+
+  return (
+    typeof value.reason === 'string' &&
+    iterationElementCaptureFailureReasons.includes(
+      value.reason as IterationElementCaptureFailureReason,
+    ) &&
+    (value.detail === undefined || typeof value.detail === 'string') &&
+    (value.urlPath === undefined || typeof value.urlPath === 'string')
+  );
+};
+
 const isIterationScrollOffset = (
   value: unknown,
 ): value is IterationScrollOffset => {
@@ -246,6 +369,14 @@ const isIterationElementLocator = (
     !isIterationElementBounds(value.bounds) ||
     !isIterationScrollOffset(value.scrollOffset) ||
     typeof value.capturedAt !== 'string'
+  ) {
+    return false;
+  }
+
+  if (
+    value.targetKind !== undefined &&
+    value.targetKind !== 'element' &&
+    value.targetKind !== 'text'
   ) {
     return false;
   }
@@ -334,15 +465,8 @@ const isIterationPreviewTargetEdit = (
 
 const isIterationInspectorRuntimeCapabilities = (
   value: unknown,
-): value is ReadonlyArray<IterationInspectorRuntimeCapability> => {
-  return (
-    isStringArray(value) &&
-    value.every((capability) =>
-      iterationInspectorRuntimeCapabilities.includes(
-        capability as IterationInspectorRuntimeCapability,
-      ),
-    )
-  );
+): value is ReadonlyArray<string> => {
+  return isStringArray(value);
 };
 
 const isIterationPreviewEditError = (
@@ -412,6 +536,18 @@ export const isIterationInspectorParentMessage = (
       );
     case 'clear_preview_edits':
       return isNonNegativeInteger(value.revision);
+    case 'capture_element_crop':
+      return (
+        typeof value.requestId === 'string' &&
+        isIterationElementLocator(value.locator) &&
+        (value.format === undefined ||
+          isIterationElementCaptureFormat(value.format)) &&
+        (value.padding === undefined || isNonNegativeInteger(value.padding)) &&
+        (value.maxWidth === undefined || isNonNegativeInteger(value.maxWidth)) &&
+        (value.maxHeight === undefined ||
+          isNonNegativeInteger(value.maxHeight)) &&
+        (value.maxBytes === undefined || isNonNegativeInteger(value.maxBytes))
+      );
     default:
       return false;
   }
@@ -452,6 +588,11 @@ export const isIterationInspectorRuntimeMessage = (
         (value.errors === undefined ||
           (Array.isArray(value.errors) &&
             value.errors.every((error) => isIterationPreviewEditError(error))))
+      );
+    case 'element_crop_captured':
+      return (
+        typeof value.requestId === 'string' &&
+        isIterationElementCaptureResult(value.result)
       );
     case 'debug_log':
       return (

@@ -1,6 +1,15 @@
 import {
+  toBlob as rasterizeElementToBlob,
+  toCanvas as rasterizeElementToCanvas,
+} from 'html-to-image';
+import { isOriginTrusted, normalizeOrigin } from '@iteraai/inspector-protocol';
+import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
+  type IterationElementCaptureFailure,
+  type IterationElementCaptureFormat,
+  type IterationElementCaptureResult,
+  type IterationElementCaptureSuccess,
   type IterationEditableValues,
   IterationElementSelection,
   type IterationElementLocator,
@@ -16,6 +25,7 @@ import {
 
 type CreateIterationInspectorRuntimeArgs = {
   allowSelfMessaging?: boolean;
+  hostOrigins?: readonly string[];
   win?: Window;
   doc?: Document;
 };
@@ -103,6 +113,31 @@ type PreviewTargetResolution =
       message: string;
     };
 
+type ElementCaptureRequest = {
+  requestId: string;
+  locator: IterationElementLocator;
+  format?: IterationElementCaptureFormat;
+  padding?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  maxBytes?: number;
+};
+
+type ElementCaptureDimensions = {
+  cssHeight: number;
+  cssWidth: number;
+  height: number;
+  scale: number;
+  width: number;
+};
+
+type DomRasterizationCrop = {
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+};
+
 export type IterationInspectorRuntime = {
   start: () => void;
   stop: () => void;
@@ -166,6 +201,7 @@ const SEMANTIC_INSPECTABLE_ELEMENT_TAG_NAMES = new Set([
 ]);
 const INSPECTABLE_ELEMENT_TAG_NAMES = new Set([
   ...SEMANTIC_INSPECTABLE_ELEMENT_TAG_NAMES,
+  'canvas',
   'div',
   'img',
 ]);
@@ -821,6 +857,7 @@ const buildInspectableTargetSelection = (
       accessibleName: getInspectableTargetAccessibleName(target, doc),
       textPreview: getInspectableTargetTextPreview(target),
       bounds: getInspectableTargetBounds(target, doc),
+      targetKind: target.kind,
     },
     editableValues: getEditableValuesForElement(target.element, win),
   };
@@ -887,6 +924,7 @@ const buildIterationElementLocator = (
     y: roundMeasurement(win.scrollY),
   },
   capturedAt: new Date().toISOString(),
+  targetKind: 'element',
   ...buildSelectionComponentPathFields(element, win),
 });
 
@@ -1433,6 +1471,1069 @@ const resolvePreviewTargetElement = (
   } as const;
 };
 
+const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS = 16_777_216;
+const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 10_000;
+
+const normalizeTrustedHostOrigins = (origins: readonly string[]) => {
+  const normalizedOrigins = new Set<string>();
+
+  for (const origin of origins) {
+    const normalizedOrigin = normalizeOrigin(origin.trim());
+
+    if (
+      normalizedOrigin !== undefined &&
+      normalizedOrigin !== 'null' &&
+      normalizedOrigin.length > 0
+    ) {
+      normalizedOrigins.add(normalizedOrigin);
+    }
+  }
+
+  return [...normalizedOrigins];
+};
+
+const getElementCaptureFailureStatus = (
+  reason: IterationElementCaptureFailure['reason'],
+): IterationElementCaptureFailure['status'] => {
+  return reason === 'dom_rasterization_unavailable'
+    ? 'unavailable'
+    : 'failed';
+};
+
+const createElementCaptureFailure = (
+  reason: IterationElementCaptureFailure['reason'],
+  win: Window,
+  detail?: string,
+): IterationElementCaptureFailure => ({
+  status: getElementCaptureFailureStatus(reason),
+  reason,
+  ...(detail === undefined ? {} : { detail }),
+  urlPath: getUrlPath(win.location),
+});
+
+const getErrorDetail = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return typeof error === 'string' ? error : undefined;
+};
+
+const getCaptureDimensions = (
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  win: Window,
+): ElementCaptureDimensions | null => {
+  const padding = request.padding ?? 0;
+  const cssWidth = rect.width + padding * 2;
+  const cssHeight = rect.height + padding * 2;
+
+  if (cssWidth <= 0 || cssHeight <= 0) {
+    return null;
+  }
+
+  const devicePixelRatio =
+    Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0
+      ? win.devicePixelRatio
+      : 1;
+  const maxPixelWidth =
+    request.maxWidth === undefined || request.maxWidth <= 0
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(request.maxWidth));
+  const maxPixelHeight =
+    request.maxHeight === undefined || request.maxHeight <= 0
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(request.maxHeight));
+  const maxWidthScale =
+    maxPixelWidth === Number.POSITIVE_INFINITY
+      ? devicePixelRatio
+      : maxPixelWidth / cssWidth;
+  const maxHeightScale =
+    maxPixelHeight === Number.POSITIVE_INFINITY
+      ? devicePixelRatio
+      : maxPixelHeight / cssHeight;
+  const scale = Math.min(devicePixelRatio, maxWidthScale, maxHeightScale);
+  const width = Math.max(1, Math.round(cssWidth * scale));
+  const height = Math.max(1, Math.round(cssHeight * scale));
+
+  return {
+    cssHeight,
+    cssWidth,
+    height: Math.min(height, maxPixelHeight),
+    scale,
+    width: Math.min(width, maxPixelWidth),
+  };
+};
+
+const enforceCapturePixelCap = (
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+) => {
+  const pixelCount = dimensions.width * dimensions.height;
+
+  if (pixelCount <= DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS) {
+    return null;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Captured image would be ${pixelCount} pixels, exceeding the default ${DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS} pixel limit.`,
+  );
+};
+
+const enforceRasterSourcePixelCap = (
+  rect: IterationElementBounds,
+  scale: number,
+  win: Window,
+) => {
+  const width = Math.max(1, Math.round(rect.width * scale));
+  const height = Math.max(1, Math.round(rect.height * scale));
+  const pixelCount = width * height;
+
+  if (pixelCount <= DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS) {
+    return null;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Raster source would be ${pixelCount} pixels before cropping, exceeding the default ${DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS} pixel limit.`,
+  );
+};
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  win: Window,
+): Promise<T> => {
+  let timeoutHandle: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = win.setTimeout(() => {
+      reject(new Error(`DOM rasterization timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle !== undefined) {
+      win.clearTimeout(timeoutHandle);
+    }
+  }
+};
+
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  mimeType: IterationElementCaptureFormat,
+) => {
+  return new Promise<Blob | null>((resolve, reject) => {
+    try {
+      if (typeof canvas.toBlob !== 'function') {
+        resolve(null);
+        return;
+      }
+
+      canvas.toBlob(resolve, mimeType);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const buildCaptureSuccess = (
+  blob: Blob,
+  method: IterationElementCaptureSuccess['method'],
+  rect: IterationElementBounds,
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+): IterationElementCaptureSuccess => ({
+  status: 'captured',
+  blob,
+  mimeType: 'image/png',
+  width: dimensions.width,
+  height: dimensions.height,
+  capturedAt: new Date().toISOString(),
+  method,
+  rect,
+  scrollOffset: {
+    x: roundMeasurement(win.scrollX),
+    y: roundMeasurement(win.scrollY),
+  },
+  devicePixelRatio:
+    Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0
+      ? win.devicePixelRatio
+      : 1,
+  urlPath: getUrlPath(win.location),
+});
+
+const enforceCaptureMaxBytes = (
+  result: IterationElementCaptureResult,
+  request: ElementCaptureRequest,
+  win: Window,
+): IterationElementCaptureResult => {
+  const maxBytes = request.maxBytes ?? DEFAULT_ELEMENT_CAPTURE_MAX_BYTES;
+
+  if (result.status !== 'captured' || result.blob.size <= maxBytes) {
+    return result;
+  }
+
+  return createElementCaptureFailure(
+    'oversize',
+    win,
+    `Captured image is ${result.blob.size} bytes, exceeding ${maxBytes} bytes.`,
+  );
+};
+
+const captureCanvasElement = async (
+  element: HTMLCanvasElement,
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  dimensions: ElementCaptureDimensions,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  try {
+    const padding = request.padding ?? 0;
+    const canUseDirectCanvasBlob =
+      padding === 0 &&
+      dimensions.width === element.width &&
+      dimensions.height === element.height;
+    const exportCanvas = canUseDirectCanvasBlob
+      ? element
+      : doc.createElement('canvas');
+
+    if (!canUseDirectCanvasBlob) {
+      exportCanvas.width = dimensions.width;
+      exportCanvas.height = dimensions.height;
+      const context = exportCanvas.getContext('2d');
+
+      if (context === null) {
+        return createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Could not create a 2D canvas context for canvas capture.',
+        );
+      }
+
+      context.drawImage(
+        element,
+        0,
+        0,
+        element.width,
+        element.height,
+        Math.round(padding * dimensions.scale),
+        Math.round(padding * dimensions.scale),
+        Math.max(1, Math.round(rect.width * dimensions.scale)),
+        Math.max(1, Math.round(rect.height * dimensions.scale)),
+      );
+    }
+
+    const blob = await canvasToBlob(exportCanvas, 'image/png');
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'canvas_tainted',
+        win,
+        'Canvas export returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'canvas', rect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'canvas_tainted',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+type ImageDrawRegion = {
+  source: {
+    height: number;
+    width: number;
+    x: number;
+    y: number;
+  };
+  target: {
+    height: number;
+    width: number;
+    x: number;
+    y: number;
+  };
+};
+
+const clampMeasurement = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const parseObjectPositionComponent = (
+  value: string | undefined,
+  axis: 'x' | 'y',
+) => {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === undefined || normalized.length === 0) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (normalized === 'left' || normalized === 'top') {
+    return { type: 'percent' as const, value: 0 };
+  }
+
+  if (normalized === 'center') {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (normalized === 'right' || normalized === 'bottom') {
+    return { type: 'percent' as const, value: 1 };
+  }
+
+  if (normalized.endsWith('%')) {
+    const percent = Number.parseFloat(normalized.slice(0, -1));
+
+    if (Number.isFinite(percent)) {
+      return { type: 'percent' as const, value: percent / 100 };
+    }
+  }
+
+  if (normalized.endsWith('px')) {
+    const length = Number.parseFloat(normalized.slice(0, -2));
+
+    if (Number.isFinite(length)) {
+      return { type: 'length' as const, value: length };
+    }
+  }
+
+  if (axis === 'x' && (normalized === 'top' || normalized === 'bottom')) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  if (axis === 'y' && (normalized === 'left' || normalized === 'right')) {
+    return { type: 'percent' as const, value: 0.5 };
+  }
+
+  return { type: 'percent' as const, value: 0.5 };
+};
+
+const getObjectPositionParts = (objectPosition: string) =>
+  objectPosition
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((part) => part.length > 0);
+
+const canUseNativeImageObjectPosition = (objectPosition: string) =>
+  getObjectPositionParts(objectPosition).length <= 2;
+
+const isHorizontalObjectPositionKeyword = (part: string) =>
+  part === 'left' || part === 'right';
+
+const isVerticalObjectPositionKeyword = (part: string) =>
+  part === 'top' || part === 'bottom';
+
+const resolveObjectPositionOffset = (
+  containerSize: number,
+  objectSize: number,
+  position: ReturnType<typeof parseObjectPositionComponent>,
+) => {
+  if (position.type === 'length') {
+    return position.value;
+  }
+
+  return (containerSize - objectSize) * position.value;
+};
+
+const getObjectPositionComponents = (objectPosition: string) => {
+  const parts = getObjectPositionParts(objectPosition);
+
+  if (parts.length === 0) {
+    return ['50%', '50%'] as const;
+  }
+
+  if (parts.length === 1) {
+    if (isVerticalObjectPositionKeyword(parts[0])) {
+      return ['50%', parts[0]] as const;
+    }
+
+    return [parts[0], '50%'] as const;
+  }
+
+  const [first, second] = parts;
+  const firstIsVertical = isVerticalObjectPositionKeyword(first);
+  const secondIsHorizontal = isHorizontalObjectPositionKeyword(second);
+
+  if (firstIsVertical || (first === 'center' && secondIsHorizontal)) {
+    return [second, first] as const;
+  }
+
+  return [first, second] as const;
+};
+
+const isZeroCssMeasurement = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === undefined || normalized.length === 0) {
+    return true;
+  }
+
+  return normalized.split(/\s+/).every((part) => {
+    if (part === '0') {
+      return true;
+    }
+
+    const numericValue = Number.parseFloat(part);
+
+    return Number.isFinite(numericValue) && numericValue === 0;
+  });
+};
+
+const hasCssEffectValue = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  return (
+    normalized !== undefined &&
+    normalized.length > 0 &&
+    normalized !== 'none' &&
+    normalized !== 'normal'
+  );
+};
+
+const hasVisibleBackgroundColor = (value: string | undefined) => {
+  const normalized = value?.trim().toLowerCase();
+
+  return (
+    normalized !== undefined &&
+    normalized.length > 0 &&
+    normalized !== 'transparent' &&
+    normalized !== 'rgba(0, 0, 0, 0)' &&
+    normalized !== 'rgba(0,0,0,0)'
+  );
+};
+
+const hasNonZeroBoxEdge = (
+  style: CSSStyleDeclaration,
+  propertyNames: readonly (keyof CSSStyleDeclaration)[],
+) => propertyNames.some((propertyName) => {
+  const value = style[propertyName];
+
+  return typeof value === 'string' && !isZeroCssMeasurement(value);
+});
+
+const hasStyledImageEffects = (style: CSSStyleDeclaration) => {
+  const hasBorderRadius =
+    !isZeroCssMeasurement(style.borderRadius) ||
+    !isZeroCssMeasurement(style.borderTopLeftRadius) ||
+    !isZeroCssMeasurement(style.borderTopRightRadius) ||
+    !isZeroCssMeasurement(style.borderBottomRightRadius) ||
+    !isZeroCssMeasurement(style.borderBottomLeftRadius);
+  const hasBorderWidth = hasNonZeroBoxEdge(style, [
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+  ]);
+  const hasPadding = hasNonZeroBoxEdge(style, [
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+  ]);
+  const opacity = Number.parseFloat(style.opacity || '1');
+  const hasOpacityEffect = Number.isFinite(opacity) && opacity < 1;
+  const maskImage = (style as CSSStyleDeclaration & { maskImage?: string })
+    .maskImage;
+  const webkitMaskImage = (
+    style as CSSStyleDeclaration & { webkitMaskImage?: string }
+  ).webkitMaskImage;
+
+  return (
+    hasBorderRadius ||
+    hasBorderWidth ||
+    hasPadding ||
+    hasVisibleBackgroundColor(style.backgroundColor) ||
+    hasCssEffectValue(style.backgroundImage) ||
+    hasCssEffectValue(style.boxShadow) ||
+    hasCssEffectValue(style.clipPath) ||
+    hasCssEffectValue(style.filter) ||
+    hasCssEffectValue(style.transform) ||
+    hasCssEffectValue(maskImage) ||
+    hasCssEffectValue(webkitMaskImage) ||
+    hasOpacityEffect
+  );
+};
+
+const shouldRasterizeImageElement = (
+  element: HTMLImageElement,
+  win: Window,
+) => {
+  const style = win.getComputedStyle(element);
+
+  return (
+    !canUseNativeImageObjectPosition(style.objectPosition || '50% 50%') ||
+    hasStyledImageEffects(style)
+  );
+};
+
+const shouldRasterizeCanvasElement = (
+  element: HTMLCanvasElement,
+  win: Window,
+) => {
+  const style = win.getComputedStyle(element);
+  const objectFit = (style.objectFit || 'fill').trim().toLowerCase();
+
+  return (
+    (objectFit.length > 0 && objectFit !== 'fill') ||
+    !canUseNativeImageObjectPosition(style.objectPosition || '50% 50%') ||
+    hasStyledImageEffects(style)
+  );
+};
+
+const getImageObjectFitSize = (
+  fit: string,
+  boxWidth: number,
+  boxHeight: number,
+  naturalWidth: number,
+  naturalHeight: number,
+) => {
+  if (fit === 'cover') {
+    const scale = Math.max(boxWidth / naturalWidth, boxHeight / naturalHeight);
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  if (fit === 'contain') {
+    const scale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  if (fit === 'none') {
+    return {
+      height: naturalHeight,
+      width: naturalWidth,
+    };
+  }
+
+  if (fit === 'scale-down') {
+    const containScale = Math.min(
+      boxWidth / naturalWidth,
+      boxHeight / naturalHeight,
+    );
+    const scale = Math.min(1, containScale);
+
+    return {
+      height: naturalHeight * scale,
+      width: naturalWidth * scale,
+    };
+  }
+
+  return {
+    height: boxHeight,
+    width: boxWidth,
+  };
+};
+
+const getImageDrawRegion = (
+  element: HTMLImageElement,
+  rect: IterationElementBounds,
+  win: Window,
+): ImageDrawRegion | null => {
+  const style = win.getComputedStyle(element);
+  const fit = style.objectFit || 'fill';
+
+  if (fit === 'fill') {
+    return {
+      source: {
+        x: 0,
+        y: 0,
+        width: element.naturalWidth,
+        height: element.naturalHeight,
+      },
+      target: {
+        x: 0,
+        y: 0,
+        width: rect.width,
+        height: rect.height,
+      },
+    };
+  }
+
+  const objectSize = getImageObjectFitSize(
+    fit,
+    rect.width,
+    rect.height,
+    element.naturalWidth,
+    element.naturalHeight,
+  );
+  const [positionX, positionY] = getObjectPositionComponents(
+    style.objectPosition || '50% 50%',
+  );
+  const objectX = resolveObjectPositionOffset(
+    rect.width,
+    objectSize.width,
+    parseObjectPositionComponent(positionX, 'x'),
+  );
+  const objectY = resolveObjectPositionOffset(
+    rect.height,
+    objectSize.height,
+    parseObjectPositionComponent(positionY, 'y'),
+  );
+  const visibleLeft = clampMeasurement(objectX, 0, rect.width);
+  const visibleTop = clampMeasurement(objectY, 0, rect.height);
+  const visibleRight = clampMeasurement(objectX + objectSize.width, 0, rect.width);
+  const visibleBottom = clampMeasurement(
+    objectY + objectSize.height,
+    0,
+    rect.height,
+  );
+  const visibleWidth = visibleRight - visibleLeft;
+  const visibleHeight = visibleBottom - visibleTop;
+
+  if (visibleWidth <= 0 || visibleHeight <= 0) {
+    return null;
+  }
+
+  const scaleX = objectSize.width / element.naturalWidth;
+  const scaleY = objectSize.height / element.naturalHeight;
+
+  return {
+    source: {
+      x: clampMeasurement((visibleLeft - objectX) / scaleX, 0, element.naturalWidth),
+      y: clampMeasurement(
+        (visibleTop - objectY) / scaleY,
+        0,
+        element.naturalHeight,
+      ),
+      width: clampMeasurement(visibleWidth / scaleX, 0, element.naturalWidth),
+      height: clampMeasurement(visibleHeight / scaleY, 0, element.naturalHeight),
+    },
+    target: {
+      x: visibleLeft,
+      y: visibleTop,
+      width: visibleWidth,
+      height: visibleHeight,
+    },
+  };
+};
+
+const captureImageElement = async (
+  element: HTMLImageElement,
+  rect: IterationElementBounds,
+  request: ElementCaptureRequest,
+  dimensions: ElementCaptureDimensions,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  if (!element.complete || element.naturalWidth <= 0 || element.naturalHeight <= 0) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Image target is not loaded.',
+    );
+  }
+
+  try {
+    const padding = request.padding ?? 0;
+    const drawRegion = getImageDrawRegion(element, rect, win);
+
+    if (drawRegion === null) {
+      return createElementCaptureFailure(
+        'unsupported_target',
+        win,
+        'Image target has no visible rendered content.',
+      );
+    }
+
+    const exportCanvas = doc.createElement('canvas');
+    exportCanvas.width = dimensions.width;
+    exportCanvas.height = dimensions.height;
+    const context = exportCanvas.getContext('2d');
+
+    if (context === null) {
+      return createElementCaptureFailure(
+        'unsupported_target',
+        win,
+        'Could not create a 2D canvas context for image capture.',
+      );
+    }
+
+    context.drawImage(
+      element,
+      drawRegion.source.x,
+      drawRegion.source.y,
+      drawRegion.source.width,
+      drawRegion.source.height,
+      Math.round((padding + drawRegion.target.x) * dimensions.scale),
+      Math.round((padding + drawRegion.target.y) * dimensions.scale),
+      Math.max(1, Math.round(drawRegion.target.width * dimensions.scale)),
+      Math.max(1, Math.round(drawRegion.target.height * dimensions.scale)),
+    );
+
+    const blob = await canvasToBlob(exportCanvas, 'image/png');
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'canvas_tainted',
+        win,
+        'Image canvas export returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'image', rect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'canvas_tainted',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+const captureDomElement = async (
+  element: HTMLElement,
+  rasterizedRect: IterationElementBounds,
+  resultRect: IterationElementBounds,
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+  crop?: DomRasterizationCrop,
+): Promise<IterationElementCaptureResult> => {
+  if (typeof rasterizeElementToBlob !== 'function') {
+    return createElementCaptureFailure(
+      'dom_rasterization_unavailable',
+      win,
+      'DOM rasterizer is not available in this runtime bundle.',
+    );
+  }
+
+  try {
+    const blob =
+      crop === undefined
+        ? await withTimeout(
+            rasterizeElementToBlob(element, {
+              cacheBust: true,
+              height: rasterizedRect.height,
+              pixelRatio: dimensions.scale,
+              type: 'image/png',
+              width: rasterizedRect.width,
+            }),
+            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
+            win,
+          )
+        : await withTimeout(
+            rasterizeElementToCanvas(element, {
+              cacheBust: true,
+              height: rasterizedRect.height,
+              pixelRatio: dimensions.scale,
+              width: rasterizedRect.width,
+            }).then(async (sourceCanvas) => {
+              const exportCanvas = element.ownerDocument.createElement('canvas');
+              exportCanvas.width = dimensions.width;
+              exportCanvas.height = dimensions.height;
+              const context = exportCanvas.getContext('2d');
+
+              if (context === null) {
+                return null;
+              }
+
+              context.drawImage(
+                sourceCanvas,
+                Math.round(crop.offsetX * dimensions.scale),
+                Math.round(crop.offsetY * dimensions.scale),
+                Math.max(1, Math.round(crop.width * dimensions.scale)),
+                Math.max(1, Math.round(crop.height * dimensions.scale)),
+                0,
+                0,
+                dimensions.width,
+                dimensions.height,
+              );
+
+              return canvasToBlob(exportCanvas, 'image/png');
+            }),
+            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
+            win,
+          );
+
+    if (blob === null) {
+      return createElementCaptureFailure(
+        'dom_rasterization_failed',
+        win,
+        'DOM rasterizer returned no image data.',
+      );
+    }
+
+    return buildCaptureSuccess(blob, 'dom-rasterizer', resultRect, dimensions, win);
+  } catch (error) {
+    return createElementCaptureFailure(
+      'dom_rasterization_failed',
+      win,
+      getErrorDetail(error),
+    );
+  }
+};
+
+const getCurrentTextLocatorBounds = (
+  element: Element,
+  locator: IterationElementLocator,
+  doc: Document,
+): IterationElementBounds | null => {
+  const textNode = findPreviewTextNode(element, locator);
+
+  if (textNode !== null) {
+    return measureTextNodeBounds(textNode, doc);
+  }
+
+  return getClosestTextLocatorBounds(element, locator, doc);
+};
+
+const measureTextNodeBounds = (
+  textNode: Text,
+  doc: Document,
+): IterationElementBounds | null => {
+  try {
+    const range = doc.createRange();
+    range.selectNodeContents(textNode);
+
+    if (typeof range.getBoundingClientRect === 'function') {
+      const rect = range.getBoundingClientRect();
+
+      if (rect.width > 0 || rect.height > 0) {
+        return buildBoundsFromRect(rect);
+      }
+    }
+  } catch {
+    // Range measurement is best-effort; callers handle missing text bounds.
+  }
+
+  return null;
+};
+
+const getBoundsDistance = (
+  first: IterationElementBounds,
+  second: IterationElementBounds,
+) => {
+  const firstCenterX = first.left + first.width / 2;
+  const firstCenterY = first.top + first.height / 2;
+  const secondCenterX = second.left + second.width / 2;
+  const secondCenterY = second.top + second.height / 2;
+  const deltaX = firstCenterX - secondCenterX;
+  const deltaY = firstCenterY - secondCenterY;
+
+  return deltaX * deltaX + deltaY * deltaY;
+};
+
+const getClosestTextLocatorBounds = (
+  element: Element,
+  locator: IterationElementLocator,
+  doc: Document,
+): IterationElementBounds | null => {
+  const ownerDocument = element.ownerDocument;
+
+  if (ownerDocument === null) {
+    return null;
+  }
+
+  const walker = ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let currentNode = walker.nextNode();
+  let closestBounds: IterationElementBounds | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  while (currentNode !== null) {
+    if (
+      currentNode instanceof Text &&
+      !isNodeWithinOverlayRoot(currentNode) &&
+      normalizeWhitespace(currentNode.textContent) !== null
+    ) {
+      const bounds = measureTextNodeBounds(currentNode, doc);
+
+      if (bounds !== null) {
+        const distance = getBoundsDistance(bounds, locator.bounds);
+
+        if (distance < closestDistance) {
+          closestBounds = bounds;
+          closestDistance = distance;
+        }
+      }
+    }
+
+    currentNode = walker.nextNode();
+  }
+
+  return closestBounds;
+};
+
+const captureElementCrop = async (
+  request: ElementCaptureRequest,
+  doc: Document,
+  win: Window,
+): Promise<IterationElementCaptureResult> => {
+  const resolution = resolvePreviewTargetElement(request.locator, doc, win);
+
+  if ('code' in resolution) {
+    return createElementCaptureFailure(resolution.code, win, resolution.message);
+  }
+
+  const elementGlobal = (resolution.element.ownerDocument.defaultView ??
+    win) as unknown as typeof globalThis;
+  const isCanvasElement =
+    resolution.element instanceof elementGlobal.HTMLCanvasElement;
+  const isImageElement = resolution.element instanceof elementGlobal.HTMLImageElement;
+  const isDomElement = resolution.element instanceof elementGlobal.HTMLElement;
+
+  if (
+    !isCanvasElement &&
+    !isImageElement &&
+    isDomElement &&
+    (request.padding ?? 0) > 0
+  ) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Padding is not supported for DOM rasterizer captures in this POC.',
+    );
+  }
+
+  const elementRect = buildBoundsFromRect(
+    resolution.element.getBoundingClientRect(),
+  );
+  const isTextLocator = request.locator.targetKind === 'text';
+  const textBounds =
+    isTextLocator
+      ? getCurrentTextLocatorBounds(resolution.element, request.locator, doc)
+      : null;
+
+  if (isTextLocator && textBounds === null) {
+    return createElementCaptureFailure(
+      'locator_not_found',
+      win,
+      'Text target could not be re-resolved for capture.',
+    );
+  }
+
+  const rect = textBounds ?? elementRect;
+  const dimensions = getCaptureDimensions(rect, request, win);
+
+  if (dimensions === null) {
+    return createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Target has no measurable rendered size.',
+    );
+  }
+
+  const pixelCapFailure = enforceCapturePixelCap(dimensions, win);
+
+  if (pixelCapFailure !== null) {
+    return pixelCapFailure;
+  }
+
+  const textSelectionCrop =
+    isTextLocator
+      ? {
+          height: rect.height,
+          offsetX: rect.left - elementRect.left,
+          offsetY: rect.top - elementRect.top,
+          width: rect.width,
+        }
+      : undefined;
+  const domRasterizedRect =
+    textSelectionCrop === undefined ? rect : elementRect;
+  const sourcePixelCapFailure =
+    textSelectionCrop === undefined
+      ? null
+      : enforceRasterSourcePixelCap(domRasterizedRect, dimensions.scale, win);
+
+  if (sourcePixelCapFailure !== null) {
+    return sourcePixelCapFailure;
+  }
+
+  let result: IterationElementCaptureResult;
+
+  if (isCanvasElement) {
+    const canvasElement = resolution.element as HTMLCanvasElement;
+
+    if (shouldRasterizeCanvasElement(canvasElement, win)) {
+      if ((request.padding ?? 0) > 0) {
+        result = createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Padding is not supported for DOM rasterizer captures in this POC.',
+        );
+      } else {
+        result = await captureDomElement(
+          canvasElement,
+          domRasterizedRect,
+          rect,
+          dimensions,
+          win,
+          textSelectionCrop,
+        );
+      }
+    } else {
+      result = await captureCanvasElement(
+        canvasElement,
+        rect,
+        request,
+        dimensions,
+        doc,
+        win,
+      );
+    }
+  } else if (isImageElement) {
+    const imageElement = resolution.element as HTMLImageElement;
+
+    if (shouldRasterizeImageElement(imageElement, win)) {
+      if ((request.padding ?? 0) > 0) {
+        result = createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Padding is not supported for DOM rasterizer captures in this POC.',
+        );
+      } else {
+        result = await captureDomElement(
+          imageElement,
+          domRasterizedRect,
+          rect,
+          dimensions,
+          win,
+          textSelectionCrop,
+        );
+      }
+    } else {
+      result = await captureImageElement(
+        imageElement,
+        rect,
+        request,
+        dimensions,
+        doc,
+        win,
+      );
+    }
+  } else if (isDomElement) {
+    result = await captureDomElement(
+      resolution.element as HTMLElement,
+      domRasterizedRect,
+      rect,
+      dimensions,
+      win,
+      textSelectionCrop,
+    );
+  } else {
+    result = createElementCaptureFailure(
+      'unsupported_target',
+      win,
+      'Only HTMLElement, canvas, and image targets are supported.',
+    );
+  }
+
+  return enforceCaptureMaxBytes(result, request, win);
+};
+
 const collapseEditableBoxValues = (values: readonly [string, string, string, string]) => {
   const [top, right, bottom, left] = values.map((value) => value.trim());
 
@@ -1579,6 +2680,9 @@ const findPreviewTextNode = (
 
   const walker = ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   let currentNode = walker.nextNode();
+  let firstMatchingTextNode: Text | null = null;
+  let closestTextNode: Text | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
 
   while (currentNode !== null) {
     if (
@@ -1586,13 +2690,24 @@ const findPreviewTextNode = (
       !isNodeWithinOverlayRoot(currentNode) &&
       normalizeWhitespace(currentNode.textContent) === expectedText
     ) {
-      return currentNode;
+      firstMatchingTextNode ??= currentNode;
+
+      const bounds = measureTextNodeBounds(currentNode, ownerDocument);
+
+      if (bounds !== null) {
+        const distance = getBoundsDistance(bounds, locator.bounds);
+
+        if (distance < closestDistance) {
+          closestTextNode = currentNode;
+          closestDistance = distance;
+        }
+      }
     }
 
     currentNode = walker.nextNode();
   }
 
-  return null;
+  return closestTextNode ?? firstMatchingTextNode;
 };
 
 const createPreviewPatchSession = (): PreviewPatchSession => {
@@ -1793,11 +2908,13 @@ const applyPreviewOperation = (
 
 export const createIterationInspectorRuntime = ({
   allowSelfMessaging = false,
+  hostOrigins = [],
   win = window,
   doc = document,
 }: CreateIterationInspectorRuntimeArgs = {}): IterationInspectorRuntime => {
   let active = false;
   let started = false;
+  let lifecycleGeneration = 0;
   let currentHover: InspectableTarget | null = null;
   let currentSelected: InspectableTarget | null = null;
   let overlay: OverlayElements | null = null;
@@ -1814,17 +2931,32 @@ export const createIterationInspectorRuntime = ({
   let selectionMode: IterationInspectorSelectionMode = 'single';
   let previewPatchSession: PreviewPatchSession | null = null;
   const canPostToParent = allowSelfMessaging || win.parent !== win;
+  const trustedHostOrigins = normalizeTrustedHostOrigins(hostOrigins);
+  const hasHostOriginConfiguration = hostOrigins.length > 0;
+  const hasTrustedHostOrigins = trustedHostOrigins.length > 0;
+  const runtimeCapabilities = hasTrustedHostOrigins
+    ? [...iterationInspectorRuntimeCapabilities]
+    : iterationInspectorRuntimeCapabilities.filter(
+        (capability) => capability !== 'element_capture_v1',
+      );
 
   type IterationInspectorDebugLogInput =
     | IterationInspectorDebugDetails
     | (() => IterationInspectorDebugDetails);
 
-  const emit = (message: IterationInspectorRuntimeMessage) => {
+  const postToParent = (
+    message: IterationInspectorRuntimeMessage,
+    targetOrigin: string,
+  ) => {
     if (!canPostToParent) {
       return;
     }
 
-    win.parent.postMessage(message, parentOrigin ?? '*');
+    win.parent.postMessage(message, targetOrigin);
+  };
+
+  const emit = (message: IterationInspectorRuntimeMessage) => {
+    postToParent(message, parentOrigin ?? '*');
   };
 
   const emitDebugLog = (
@@ -2047,6 +3179,56 @@ export const createIterationInspectorRuntime = ({
     emitPreviewEditsStatus(revision, result);
   };
 
+  const captureAndEmitElementCrop = (
+    request: ElementCaptureRequest,
+    responseTargetOrigin: string | null,
+  ) => {
+    if (responseTargetOrigin === null) {
+      emit({
+        channel: ITERATION_INSPECTOR_CHANNEL,
+        kind: 'element_crop_captured',
+        requestId: request.requestId,
+        result: createElementCaptureFailure(
+          'unsupported_target',
+          win,
+          'Element capture requires a concrete parent origin.',
+        ),
+      });
+      return;
+    }
+
+    const requestGeneration = lifecycleGeneration;
+    const emitCaptureResponse = (result: IterationElementCaptureResult) => {
+      if (!started || lifecycleGeneration !== requestGeneration) {
+        return;
+      }
+
+      postToParent(
+        {
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'element_crop_captured',
+          requestId: request.requestId,
+          result,
+        },
+        responseTargetOrigin,
+      );
+    };
+
+    void captureElementCrop(request, doc, win)
+      .then((result) => {
+        emitCaptureResponse(result);
+      })
+      .catch((error: unknown) => {
+        emitCaptureResponse(
+          createElementCaptureFailure(
+            'dom_rasterization_failed',
+            win,
+            getErrorDetail(error),
+          ),
+        );
+      });
+  };
+
   const emitSelection = (
     target: InspectableTarget,
     event: Event,
@@ -2190,6 +3372,7 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleRouteChange = () => {
+    lifecycleGeneration += 1;
     clearPreviewEdits();
 
     if (!active) {
@@ -2254,6 +3437,11 @@ export const createIterationInspectorRuntime = ({
     }
 
     const nextParentOrigin = event.origin === 'null' ? null : event.origin;
+    const isTrustedHostOrigin = isOriginTrusted(event.origin, trustedHostOrigins);
+
+    if (hasHostOriginConfiguration && !isTrustedHostOrigin) {
+      return;
+    }
 
     if (hasParentOrigin && nextParentOrigin !== parentOrigin) {
       return;
@@ -2290,6 +3478,35 @@ export const createIterationInspectorRuntime = ({
         appliedTargetCount: 0,
         errors: [],
       });
+      return;
+    }
+
+    if (event.data.kind === 'capture_element_crop') {
+      if (!hasTrustedHostOrigins) {
+        emit({
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'element_crop_captured',
+          requestId: event.data.requestId,
+          result: {
+            status: 'unavailable',
+            reason: 'unsupported_target',
+            detail:
+              'Element capture requires configured trusted host origins.',
+            urlPath: getUrlPath(win.location),
+          },
+        });
+        return;
+      }
+
+      captureAndEmitElementCrop({
+        requestId: event.data.requestId,
+        locator: event.data.locator,
+        format: event.data.format,
+        padding: event.data.padding,
+        maxWidth: event.data.maxWidth,
+        maxHeight: event.data.maxHeight,
+        maxBytes: event.data.maxBytes,
+      }, parentOrigin);
       return;
     }
 
@@ -2548,6 +3765,7 @@ export const createIterationInspectorRuntime = ({
   };
 
   const handleBeforeUnload = () => {
+    lifecycleGeneration += 1;
     clearPreviewEdits();
 
     if (!active) {
@@ -2565,6 +3783,7 @@ export const createIterationInspectorRuntime = ({
       }
 
       started = true;
+      lifecycleGeneration += 1;
       removePatchedHistoryListeners = patchHistory();
       doc.addEventListener('pointermove', handlePointerMove, true);
       doc.addEventListener('pointerdown', handlePointerDown, true);
@@ -2609,7 +3828,7 @@ export const createIterationInspectorRuntime = ({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
         urlPath: getUrlPath(win.location),
-        capabilities: [...iterationInspectorRuntimeCapabilities],
+        capabilities: runtimeCapabilities,
       });
     },
     stop: () => {
@@ -2618,6 +3837,7 @@ export const createIterationInspectorRuntime = ({
       }
 
       started = false;
+      lifecycleGeneration += 1;
       active = false;
       hasParentOrigin = false;
       parentOrigin = null;

@@ -12,6 +12,8 @@ export type IterationScrollOffset = {
   y: number;
 };
 
+export type IterationElementTargetKind = 'element' | 'text';
+
 export type IterationElementLocator = {
   urlPath: string;
   cssSelector: string;
@@ -25,7 +27,9 @@ export type IterationElementLocator = {
   bounds: IterationElementBounds;
   scrollOffset: IterationScrollOffset;
   capturedAt: string;
+  targetKind?: IterationElementTargetKind;
   componentPath?: ReadonlyArray<string>;
+  // Legacy compatibility alias for existing React consumers.
   reactComponentPath?: ReadonlyArray<string>;
 };
 
@@ -33,6 +37,12 @@ export type IterationElementSelection = {
   displayText: string;
   element: IterationElementLocator;
   editableValues?: IterationEditableValues;
+};
+
+export type IterationInspectorRuntime = {
+  start: () => void;
+  stop: () => void;
+  isActive: () => boolean;
 };
 
 export type IterationInspectorInvalidationReason =
@@ -46,6 +56,7 @@ export type IterationInspectorDebugDetails = Record<string, unknown>;
 
 export const iterationInspectorRuntimeCapabilities = [
   'preview_edits_v1',
+  'element_capture_v1',
 ] as const;
 
 export type IterationInspectorRuntimeCapability =
@@ -68,6 +79,51 @@ export type IterationPreviewTargetEdit = {
   operations: ReadonlyArray<IterationPreviewEditOperation>;
 };
 
+export type IterationElementCaptureFormat = 'image/png';
+
+export type IterationElementCaptureMethod =
+  | 'canvas'
+  | 'image'
+  | 'dom-rasterizer';
+
+export const iterationElementCaptureFailureReasons = [
+  'url_mismatch',
+  'locator_not_found',
+  'canvas_tainted',
+  'dom_rasterization_unavailable',
+  'dom_rasterization_failed',
+  'oversize',
+  'unsupported_target',
+] as const;
+
+export type IterationElementCaptureFailureReason =
+  (typeof iterationElementCaptureFailureReasons)[number];
+
+export type IterationElementCaptureSuccess = {
+  status: 'captured';
+  blob: Blob;
+  mimeType: IterationElementCaptureFormat;
+  width: number;
+  height: number;
+  capturedAt: string;
+  method: IterationElementCaptureMethod;
+  rect: IterationElementBounds;
+  scrollOffset: IterationScrollOffset;
+  devicePixelRatio: number;
+  urlPath: string;
+};
+
+export type IterationElementCaptureFailure = {
+  status: 'failed' | 'unavailable';
+  reason: IterationElementCaptureFailureReason;
+  detail?: string;
+  urlPath?: string;
+};
+
+export type IterationElementCaptureResult =
+  | IterationElementCaptureSuccess
+  | IterationElementCaptureFailure;
+
 export const iterationPreviewEditErrorCodes = [
   'invalid_value',
   'locator_not_found',
@@ -86,7 +142,7 @@ export type IterationPreviewEditError = {
   fieldId?: string;
 };
 
-const _iterationEditableValueFieldIds = [
+const iterationEditableValueFieldIds = [
   'display',
   'flexDirection',
   'justifyContent',
@@ -104,7 +160,7 @@ const _iterationEditableValueFieldIds = [
 ] as const;
 
 export type IterationEditableValueFieldId =
-  (typeof _iterationEditableValueFieldIds)[number];
+  (typeof iterationEditableValueFieldIds)[number];
 
 export type IterationEditableValues = Partial<
   Record<IterationEditableValueFieldId, string>
@@ -139,6 +195,17 @@ export type IterationInspectorParentMessage =
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'clear_preview_edits';
       revision: number;
+    } & IterationInspectorParentMessageDebugConfig)
+  | ({
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'capture_element_crop';
+      requestId: string;
+      locator: IterationElementLocator;
+      format?: IterationElementCaptureFormat;
+      padding?: number;
+      maxWidth?: number;
+      maxHeight?: number;
+      maxBytes?: number;
     } & IterationInspectorParentMessageDebugConfig);
 
 export type IterationInspectorRuntimeMessage =
@@ -146,7 +213,7 @@ export type IterationInspectorRuntimeMessage =
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'runtime_ready';
       urlPath: string;
-      capabilities?: ReadonlyArray<IterationInspectorRuntimeCapability>;
+      capabilities?: ReadonlyArray<string>;
     }
   | {
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
@@ -172,17 +239,17 @@ export type IterationInspectorRuntimeMessage =
     }
   | {
       channel: typeof ITERATION_INSPECTOR_CHANNEL;
+      kind: 'element_crop_captured';
+      requestId: string;
+      result: IterationElementCaptureResult;
+    }
+  | {
+      channel: typeof ITERATION_INSPECTOR_CHANNEL;
       kind: 'debug_log';
       event: string;
       sessionId?: string;
       details?: IterationInspectorDebugDetails;
     };
-
-export type IterationInspectorRuntime = {
-  start: () => void;
-  stop: () => void;
-  isActive: () => boolean;
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -221,6 +288,63 @@ const isIterationElementBounds = (
   );
 };
 
+const isIterationElementCaptureFormat = (
+  value: unknown,
+): value is IterationElementCaptureFormat => value === 'image/png';
+
+const isIterationElementCaptureMethod = (
+  value: unknown,
+): value is IterationElementCaptureMethod =>
+  value === 'canvas' || value === 'image' || value === 'dom-rasterizer';
+
+const isBlobLike = (value: unknown): value is Blob => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.size === 'number' &&
+    typeof value.type === 'string' &&
+    typeof value.slice === 'function'
+  );
+};
+
+const isIterationElementCaptureResult = (
+  value: unknown,
+): value is IterationElementCaptureResult => {
+  if (!isRecord(value) || typeof value.status !== 'string') {
+    return false;
+  }
+
+  if (value.status === 'captured') {
+    return (
+      isBlobLike(value.blob) &&
+      isIterationElementCaptureFormat(value.mimeType) &&
+      isFiniteNumber(value.width) &&
+      isFiniteNumber(value.height) &&
+      typeof value.capturedAt === 'string' &&
+      isIterationElementCaptureMethod(value.method) &&
+      isIterationElementBounds(value.rect) &&
+      isIterationScrollOffset(value.scrollOffset) &&
+      isFiniteNumber(value.devicePixelRatio) &&
+      typeof value.urlPath === 'string'
+    );
+  }
+
+  if (value.status !== 'failed' && value.status !== 'unavailable') {
+    return false;
+  }
+
+  return (
+    typeof value.reason === 'string' &&
+    iterationElementCaptureFailureReasons.includes(
+      value.reason as IterationElementCaptureFailureReason,
+    ) &&
+    (value.detail === undefined || typeof value.detail === 'string') &&
+    (value.urlPath === undefined || typeof value.urlPath === 'string')
+  );
+};
+
 const isIterationScrollOffset = (
   value: unknown,
 ): value is IterationScrollOffset => {
@@ -256,6 +380,14 @@ const isIterationElementLocator = (
   }
 
   if (
+    value.targetKind !== undefined &&
+    value.targetKind !== 'element' &&
+    value.targetKind !== 'text'
+  ) {
+    return false;
+  }
+
+  if (
     value.componentPath !== undefined &&
     !isComponentPath(value.componentPath)
   ) {
@@ -272,12 +404,38 @@ const isIterationElementLocator = (
   return true;
 };
 
-const isIterationPreviewEditValueType = (
+const isIterationElementSelection = (
+  value: unknown,
+): value is IterationElementSelection => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.displayText === 'string' &&
+    isIterationElementLocator(value.element) &&
+    (value.editableValues === undefined ||
+      isIterationEditableValues(value.editableValues))
+  );
+};
+
+const isParentMessageDebugConfig = (value: Record<string, unknown>) => {
+  return (
+    (value.debugEnabled === undefined ||
+      typeof value.debugEnabled === 'boolean') &&
+    (value.debugSessionId === undefined ||
+      typeof value.debugSessionId === 'string')
+  );
+};
+
+const isPreviewEditValueType = (
   value: unknown,
 ): value is IterationPreviewEditValueType => {
   return (
-    typeof value === 'string' &&
-    ['string', 'number', 'token', 'asset_reference'].includes(value)
+    value === 'string' ||
+    value === 'number' ||
+    value === 'token' ||
+    value === 'asset_reference'
   );
 };
 
@@ -291,8 +449,7 @@ const isIterationPreviewEditOperation = (
   return (
     typeof value.fieldId === 'string' &&
     typeof value.value === 'string' &&
-    (value.valueType === undefined ||
-      isIterationPreviewEditValueType(value.valueType))
+    (value.valueType === undefined || isPreviewEditValueType(value.valueType))
   );
 };
 
@@ -306,8 +463,16 @@ const isIterationPreviewTargetEdit = (
   return (
     isIterationElementLocator(value.locator) &&
     Array.isArray(value.operations) &&
-    value.operations.every(isIterationPreviewEditOperation)
+    value.operations.every((operation) =>
+      isIterationPreviewEditOperation(operation),
+    )
   );
+};
+
+const isIterationInspectorRuntimeCapabilities = (
+  value: unknown,
+): value is ReadonlyArray<string> => {
+  return isStringArray(value);
 };
 
 const isIterationPreviewEditError = (
@@ -328,83 +493,101 @@ const isIterationPreviewEditError = (
   );
 };
 
+const isIterationEditableValues = (
+  value: unknown,
+): value is IterationEditableValues => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Object.entries(value).every(([fieldId, fieldValue]) => {
+    return (
+      iterationEditableValueFieldIds.includes(
+        fieldId as IterationEditableValueFieldId,
+      ) && typeof fieldValue === 'string'
+    );
+  });
+};
+
 export const isIterationInspectorParentMessage = (
   value: unknown,
 ): value is IterationInspectorParentMessage => {
-  if (!isRecord(value) || value.channel !== ITERATION_INSPECTOR_CHANNEL) {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.channel !== ITERATION_INSPECTOR_CHANNEL) {
+    return false;
+  }
+
+  if (!isParentMessageDebugConfig(value)) {
     return false;
   }
 
   switch (value.kind) {
-    case 'enter_select_mode': {
+    case 'enter_select_mode':
       return (
         value.selectionMode === undefined ||
         value.selectionMode === 'single' ||
         value.selectionMode === 'persistent'
       );
-    }
-
     case 'exit_select_mode':
-    case 'clear_hover': {
+    case 'clear_hover':
       return true;
-    }
-
-    case 'sync_preview_edits': {
+    case 'sync_preview_edits':
       return (
         isNonNegativeInteger(value.revision) &&
         Array.isArray(value.targets) &&
-        value.targets.every(isIterationPreviewTargetEdit)
+        value.targets.every((target) => isIterationPreviewTargetEdit(target))
       );
-    }
-
-    case 'clear_preview_edits': {
+    case 'clear_preview_edits':
       return isNonNegativeInteger(value.revision);
-    }
-
-    default: {
+    case 'capture_element_crop':
+      return (
+        typeof value.requestId === 'string' &&
+        isIterationElementLocator(value.locator) &&
+        (value.format === undefined ||
+          isIterationElementCaptureFormat(value.format)) &&
+        (value.padding === undefined || isNonNegativeInteger(value.padding)) &&
+        (value.maxWidth === undefined || isNonNegativeInteger(value.maxWidth)) &&
+        (value.maxHeight === undefined ||
+          isNonNegativeInteger(value.maxHeight)) &&
+        (value.maxBytes === undefined || isNonNegativeInteger(value.maxBytes))
+      );
+    default:
       return false;
-    }
   }
 };
 
 export const isIterationInspectorRuntimeMessage = (
   value: unknown,
 ): value is IterationInspectorRuntimeMessage => {
-  if (!isRecord(value) || value.channel !== ITERATION_INSPECTOR_CHANNEL) {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.channel !== ITERATION_INSPECTOR_CHANNEL) {
     return false;
   }
 
   switch (value.kind) {
-    case 'runtime_ready': {
+    case 'runtime_ready':
       return (
         typeof value.urlPath === 'string' &&
         (value.capabilities === undefined ||
-          (Array.isArray(value.capabilities) &&
-            isStringArray(value.capabilities)))
+          isIterationInspectorRuntimeCapabilities(value.capabilities))
       );
-    }
-
-    case 'mode_changed': {
+    case 'mode_changed':
       return typeof value.active === 'boolean';
-    }
-
-    case 'element_selected': {
-      return (
-        isRecord(value.selection) &&
-        typeof value.selection.displayText === 'string' &&
-        isIterationElementLocator(value.selection.element)
-      );
-    }
-
-    case 'selection_invalidated': {
+    case 'element_selected':
+      return isIterationElementSelection(value.selection);
+    case 'selection_invalidated':
       return (
         value.reason === 'reload' ||
         value.reason === 'route_change' ||
         value.reason === 'node_detached'
       );
-    }
-
-    case 'preview_edits_status': {
+    case 'preview_edits_status':
       return (
         isNonNegativeInteger(value.revision) &&
         isNonNegativeInteger(value.appliedTargetCount) &&
@@ -412,14 +595,19 @@ export const isIterationInspectorRuntimeMessage = (
           (Array.isArray(value.errors) &&
             value.errors.every((error) => isIterationPreviewEditError(error))))
       );
-    }
-
-    case 'debug_log': {
-      return typeof value.event === 'string';
-    }
-
-    default: {
+    case 'element_crop_captured':
+      return (
+        typeof value.requestId === 'string' &&
+        isIterationElementCaptureResult(value.result)
+      );
+    case 'debug_log':
+      return (
+        typeof value.event === 'string' &&
+        (value.sessionId === undefined ||
+          typeof value.sessionId === 'string') &&
+        (value.details === undefined || isRecord(value.details))
+      );
+    default:
       return false;
-    }
   }
 };

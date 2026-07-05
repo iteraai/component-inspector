@@ -284,7 +284,9 @@ const startRuntime = async (
     const existingIterationRuntime =
       toRuntimeWindow(win).__ITERA_ITERATION_INSPECTOR_RUNTIME__;
 
-    runtime = iterationModule.bootIterationInspectorRuntime();
+    runtime = iterationModule.bootIterationInspectorRuntime({
+      hostOrigins: options.hostOrigins,
+    });
     ownsIterationRuntime =
       runtime !== null &&
       runtime !== undefined &&

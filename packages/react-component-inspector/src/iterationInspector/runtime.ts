@@ -7,6 +7,7 @@ import type { IterationElementSelection } from './types';
 
 type CreateIterationInspectorRuntimeArgs = {
   allowSelfMessaging?: boolean;
+  hostOrigins?: readonly string[];
   win?: Window;
   doc?: Document;
 };

@@ -146,6 +146,11 @@ pre {
   background: linear-gradient(135deg, #25415f 0%, #466f9c 100%);
 }
 
+.example-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .example-grid {
   display: grid;
   gap: 18px;
@@ -308,6 +313,16 @@ pre {
   color: #435064;
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.example-capture-image {
+  display: block;
+  width: 100%;
+  margin: 12px 0 14px;
+  border: 1px solid rgba(29, 36, 50, 0.12);
+  border-radius: 14px;
+  background: #ffffff;
+  object-fit: contain;
 }
 
 .example-draft-grid {

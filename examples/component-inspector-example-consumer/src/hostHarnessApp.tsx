@@ -9,14 +9,17 @@ import {
 } from 'react';
 import {
   buildClearPreviewEditsMessage,
+  buildCaptureElementCropMessage,
   buildClearHoverMessage,
   buildEnterSelectModeMessage,
   buildHelloMessage,
   buildNodePropsRequestMessage,
   buildSyncPreviewEditsMessage,
   buildTreeRequestMessage,
+  defaultAngularEmbeddedUrl,
   defaultEmbeddedUrl,
   defaultReactEmbeddedUrl,
+  defaultVitePluginEmbeddedUrl,
   defaultVueEmbeddedUrl,
   isExampleIterationRuntimeMessage,
   isPreviewEditsStatusMessage,
@@ -25,6 +28,7 @@ import {
   publishButtonDisplayName,
 } from './hostHarnessMessages';
 import type {
+  IterationElementCaptureResult,
   IterationEditableValues,
   IterationElementSelection,
   IterationPreviewEditOperation,
@@ -65,6 +69,31 @@ const createEmptyPreviewEditDraft = (): PreviewEditDraft => ({
   borderRadius: '',
   assetReference: '',
 });
+
+const summarizeCaptureResult = (result: IterationElementCaptureResult) => {
+  if (result.status !== 'captured') {
+    return {
+      status: result.status,
+      reason: result.reason,
+      detail: result.detail,
+      urlPath: result.urlPath,
+    };
+  }
+
+  return {
+    status: result.status,
+    blobSize: result.blob.size,
+    blobType: result.blob.type,
+    width: result.width,
+    height: result.height,
+    method: result.method,
+    rect: result.rect,
+    scrollOffset: result.scrollOffset,
+    devicePixelRatio: result.devicePixelRatio,
+    urlPath: result.urlPath,
+    capturedAt: result.capturedAt,
+  };
+};
 
 const parseCssColorToHex = (value: string) => {
   const trimmedValue = value.trim();
@@ -247,6 +276,9 @@ export const HostHarnessApp = () => {
   const [previewCapabilityState, setPreviewCapabilityState] = useState(
     'waiting for runtime_ready',
   );
+  const [captureCapabilityState, setCaptureCapabilityState] = useState(
+    'waiting for runtime_ready',
+  );
   const [previewStatusSummary, setPreviewStatusSummary] = useState(
     'No preview edits applied yet.',
   );
@@ -258,6 +290,13 @@ export const HostHarnessApp = () => {
   );
   const [previewEditBaseline, setPreviewEditBaseline] =
     useState<PreviewEditDraft>(createEmptyPreviewEditDraft);
+  const [captureStatusSummary, setCaptureStatusSummary] = useState(
+    'No screenshot requested yet.',
+  );
+  const [captureStatusPayload, setCaptureStatusPayload] = useState<string>(
+    'No capture response received yet.',
+  );
+  const [captureImageUrl, setCaptureImageUrl] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const imageLikeSelection = isImageLikeSelection(selectedElement);
   const showContentControls =
@@ -268,6 +307,9 @@ export const HostHarnessApp = () => {
     selectedElement !== null && !imageLikeSelection;
   const showAssetControls = selectedElement !== null && imageLikeSelection;
   const showEffectsControls = selectedElement !== null;
+  const canCaptureSelection =
+    selectedElement !== null &&
+    captureCapabilityState === 'element_capture_v1 available';
 
   const appendLog = (
     direction: LogEntry['direction'],
@@ -339,6 +381,40 @@ export const HostHarnessApp = () => {
 
   const clearHover = () => {
     postToEmbedded(buildClearHoverMessage(), 'clear_hover');
+  };
+
+  const clearCaptureImage = () => {
+    setCaptureImageUrl((currentUrl) => {
+      if (currentUrl !== null) {
+        URL.revokeObjectURL(currentUrl);
+      }
+
+      return null;
+    });
+  };
+
+  const captureSelectedElement = () => {
+    if (selectedElement === null) {
+      setCaptureStatusSummary('Select an element before requesting a screenshot.');
+      return;
+    }
+
+    const requestId = nextRequestId();
+
+    setCaptureStatusSummary(
+      `Requesting screenshot for ${selectedElement.displayText}.`,
+    );
+    clearCaptureImage();
+    setCaptureStatusPayload(
+      prettyJson({
+        requestId,
+        locator: selectedElement.element,
+      }),
+    );
+    postToEmbedded(
+      buildCaptureElementCropMessage(requestId, selectedElement.element),
+      'capture_element_crop',
+    );
   };
 
   const syncPreviewEdits = (draft: PreviewEditDraft) => {
@@ -438,12 +514,24 @@ export const HostHarnessApp = () => {
     setSelectionSummary('No selection message received yet.');
     setSelectedElement(null);
     setPreviewCapabilityState('waiting for runtime_ready');
+    setCaptureCapabilityState('waiting for runtime_ready');
     setPreviewStatusSummary('No preview edits applied yet.');
     setPreviewStatusPayload('No preview edit status received yet.');
+    setCaptureStatusSummary('No screenshot requested yet.');
+    setCaptureStatusPayload('No capture response received yet.');
+    clearCaptureImage();
     setPreviewEditDraft(createEmptyPreviewEditDraft());
     setPreviewEditBaseline(createEmptyPreviewEditDraft());
     previewRevisionRef.current = 0;
   }, [embeddedUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (captureImageUrl !== null) {
+        URL.revokeObjectURL(captureImageUrl);
+      }
+    };
+  }, [captureImageUrl]);
 
   useEffect(() => {
     const expectedOrigin = resolveOrigin(embeddedUrl);
@@ -477,6 +565,11 @@ export const HostHarnessApp = () => {
             event.data.capabilities?.includes('preview_edits_v1')
               ? 'preview_edits_v1 available'
               : 'preview edits unavailable',
+          );
+          setCaptureCapabilityState(
+            event.data.capabilities?.includes('element_capture_v1')
+              ? 'element_capture_v1 available'
+              : 'element capture unavailable',
           );
         }
 
@@ -515,6 +608,41 @@ export const HostHarnessApp = () => {
               : `Applied ${event.data.appliedTargetCount} target(s) with ${event.data.errors.length} error(s).`,
           );
           setPreviewStatusPayload(prettyJson(event.data));
+        }
+
+        if (event.data.kind === 'element_crop_captured') {
+          const resultSummary = summarizeCaptureResult(event.data.result);
+
+          setCaptureStatusPayload(
+            prettyJson({
+              requestId: event.data.requestId,
+              result: resultSummary,
+            }),
+          );
+
+          if (event.data.result.status !== 'captured') {
+            setCaptureStatusSummary(
+              `Screenshot failed: ${event.data.result.reason}.`,
+            );
+            clearCaptureImage();
+            return;
+          }
+
+          setCaptureStatusSummary(
+            `Captured ${event.data.result.blob.size} byte ${event.data.result.mimeType} screenshot via ${event.data.result.method}.`,
+          );
+
+          if (typeof URL.createObjectURL === 'function') {
+            const nextUrl = URL.createObjectURL(event.data.result.blob);
+
+            setCaptureImageUrl((currentUrl) => {
+              if (currentUrl !== null) {
+                URL.revokeObjectURL(currentUrl);
+              }
+
+              return nextUrl;
+            });
+          }
         }
 
         return;
@@ -636,6 +764,26 @@ export const HostHarnessApp = () => {
             <button
               type='button'
               className='example-button'
+              onClick={() => {
+                setDraftEmbeddedUrl(defaultAngularEmbeddedUrl);
+                setEmbeddedUrl(defaultAngularEmbeddedUrl);
+              }}
+            >
+              Use Angular fixture
+            </button>
+            <button
+              type='button'
+              className='example-button'
+              onClick={() => {
+                setDraftEmbeddedUrl(defaultVitePluginEmbeddedUrl);
+                setEmbeddedUrl(defaultVitePluginEmbeddedUrl);
+              }}
+            >
+              Use Vite plugin fixture
+            </button>
+            <button
+              type='button'
+              className='example-button'
               onClick={() => setEmbeddedUrl(draftEmbeddedUrl)}
             >
               Apply iframe URL
@@ -694,6 +842,10 @@ export const HostHarnessApp = () => {
           <article className='example-card example-status-card'>
             <p className='example-section-label'>Preview edits</p>
             <strong>{previewCapabilityState}</strong>
+          </article>
+          <article className='example-card example-status-card'>
+            <p className='example-section-label'>Screenshots</p>
+            <strong>{captureCapabilityState}</strong>
           </article>
         </section>
 
@@ -875,6 +1027,14 @@ export const HostHarnessApp = () => {
                   >
                     Clear preview edits
                   </button>
+                  <button
+                    type='button'
+                    className='example-button'
+                    disabled={!canCaptureSelection}
+                    onClick={captureSelectedElement}
+                  >
+                    Capture screenshot
+                  </button>
                 </div>
               </div>
               <div className='example-draft-grid'>
@@ -896,6 +1056,18 @@ export const HostHarnessApp = () => {
               </div>
               <p className='example-edit-status'>{previewStatusSummary}</p>
               <pre>{previewStatusPayload}</pre>
+            </article>
+            <article className='example-card example-code-card'>
+              <p className='example-section-label'>Element screenshot</p>
+              <p className='example-edit-status'>{captureStatusSummary}</p>
+              {captureImageUrl === null ? null : (
+                <img
+                  alt='Captured selected element'
+                  className='example-capture-image'
+                  src={captureImageUrl}
+                />
+              )}
+              <pre>{captureStatusPayload}</pre>
             </article>
             <article className='example-card example-code-card'>
               <p className='example-section-label'>TREE_SNAPSHOT payload</p>

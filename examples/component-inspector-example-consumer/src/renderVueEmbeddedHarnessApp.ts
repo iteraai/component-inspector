@@ -145,6 +145,7 @@ export const renderVueEmbeddedHarnessApp = (
   });
   const runtime = bootIterationInspectorRuntime({
     allowSelfMessaging: props.allowSelfMessaging ?? false,
+    hostOrigins,
   });
 
   app.mount(container);

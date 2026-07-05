@@ -273,7 +273,7 @@ test('applies and clears iteration preview edits for a mounted Vue app', () => {
       expect.objectContaining({
         channel: ITERATION_INSPECTOR_CHANNEL,
         kind: 'runtime_ready',
-        capabilities: ['preview_edits_v1'],
+        capabilities: expect.arrayContaining(['preview_edits_v1']),
       }),
       expect.objectContaining({
         channel: ITERATION_INSPECTOR_CHANNEL,

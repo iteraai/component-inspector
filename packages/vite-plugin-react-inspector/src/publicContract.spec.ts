@@ -20,6 +20,14 @@ const readPackageExports = (): Record<string, PackageExportTarget> => {
   return packageJson.exports;
 };
 
+const readPackageDependencies = (): Record<string, string> => {
+  const packageJson = require('../package.json') as {
+    dependencies: Record<string, string>;
+  };
+
+  return packageJson.dependencies;
+};
+
 describe('public contract', () => {
   test('exports the React Vite plugin factory and alias', () => {
     expect(readPackageExports()).toStrictEqual({
@@ -36,6 +44,9 @@ describe('public contract', () => {
       'bootIteraReactInspectorViteRuntime',
       'stopIteraReactInspectorViteRuntime',
     ]);
+    expect(
+      readPackageDependencies()['@iteraai/react-component-inspector'],
+    ).toBe('0.5.0');
     expect(typeof createIteraReactInspectorVitePlugin).toBe('function');
     expect(iteraReactInspector).toBe(createIteraReactInspectorVitePlugin);
   });

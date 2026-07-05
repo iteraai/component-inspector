@@ -13,6 +13,12 @@ export {
   isIterationInspectorParentMessage,
   isIterationInspectorRuntimeMessage,
   type IterationElementBounds,
+  type IterationElementCaptureFailure,
+  type IterationElementCaptureFailureReason,
+  type IterationElementCaptureFormat,
+  type IterationElementCaptureMethod,
+  type IterationElementCaptureResult,
+  type IterationElementCaptureSuccess,
   type IterationEditableValueFieldId,
   type IterationEditableValues,
   type IterationElementLocator,
@@ -34,6 +40,7 @@ export {
 
 type CreateIterationInspectorRuntimeArgs = {
   allowSelfMessaging?: boolean;
+  hostOrigins?: readonly string[];
   win?: Window;
   doc?: Document;
 };

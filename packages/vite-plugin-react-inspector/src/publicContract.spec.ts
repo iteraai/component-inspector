@@ -46,7 +46,7 @@ describe('public contract', () => {
     ]);
     expect(
       readPackageDependencies()['@iteraai/react-component-inspector'],
-    ).toBe('0.5.0');
+    ).toBe('0.5.1');
     expect(typeof createIteraReactInspectorVitePlugin).toBe('function');
     expect(iteraReactInspector).toBe(createIteraReactInspectorVitePlugin);
   });

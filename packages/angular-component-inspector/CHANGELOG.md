@@ -1,5 +1,11 @@
 # @iteraai/angular-component-inspector
 
+## 0.2.1
+
+### Patch Changes
+
+- Re-release the runtime-assisted iteration element capture package output for npm publishing.
+
 ## 0.2.0
 
 ### Minor Changes

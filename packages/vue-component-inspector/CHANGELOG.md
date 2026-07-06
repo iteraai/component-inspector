@@ -1,5 +1,11 @@
 # @iteraai/vue-component-inspector
 
+## 0.3.1
+
+### Patch Changes
+
+- Re-release the runtime-assisted iteration element capture package output for npm publishing.
+
 ## 0.3.0
 
 ### Minor Changes

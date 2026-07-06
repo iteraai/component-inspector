@@ -1,5 +1,11 @@
 # @iteraai/react-component-inspector
 
+## 0.5.1
+
+### Patch Changes
+
+- Re-release the runtime-assisted iteration element capture package output for npm publishing.
+
 ## 0.5.0
 
 ### Minor Changes

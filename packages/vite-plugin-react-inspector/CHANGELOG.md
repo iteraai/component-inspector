@@ -1,5 +1,14 @@
 # `@iteraai/vite-plugin-react-inspector`
 
+## 0.1.2
+
+### Patch Changes
+
+- Re-release the capture-enabled Vite plugin package against `@iteraai/react-component-inspector@0.5.1` for npm publishing.
+
+- Updated dependencies
+  - @iteraai/react-component-inspector@0.5.1
+
 ## 0.1.1
 
 ### Patch Changes

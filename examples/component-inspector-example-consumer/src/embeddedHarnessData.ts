@@ -11,11 +11,22 @@ const exampleNodes: TreeNode[] = [
     id: 'root-app',
     displayName: 'ExampleEmbeddedHarness',
     parentId: null,
-    childrenIds: ['hero-card', 'checklist-panel', 'media-panel'],
+    childrenIds: [
+      'hero-card',
+      'complex-capture-fixture',
+      'checklist-panel',
+      'media-panel',
+    ],
   },
   {
     id: 'hero-card',
     displayName: 'HeroCard',
+    parentId: 'root-app',
+    childrenIds: [],
+  },
+  {
+    id: 'complex-capture-fixture',
+    displayName: 'ComplexCaptureFixture',
     parentId: 'root-app',
     childrenIds: [],
   },
@@ -61,6 +72,10 @@ export const exampleNodePropsById: ExampleNodePropsById = {
   },
   'checklist-panel': {
     checks: ['handshake', 'tree', 'props', 'selection'],
+  },
+  'complex-capture-fixture': {
+    title: 'Airbnb-style screenshot fixture',
+    target: 'complex-category-amazing-pools',
   },
   'publish-button': {
     label: 'Publish iteration',

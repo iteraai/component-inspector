@@ -1,5 +1,16 @@
 # @iteraai/angular-component-inspector
 
+## 0.2.1
+
+### Patch Changes
+
+- Harden runtime-assisted element capture for production UI targets.
+
+  DOM rasterizer captures now support request padding by drawing rasterized output
+  into a padded PNG canvas instead of returning `unsupported_target`, and the DOM
+  rasterization timeout has been increased to give real application elements more
+  headroom before returning `dom_rasterization_failed`.
+
 ## 0.2.0
 
 ### Minor Changes

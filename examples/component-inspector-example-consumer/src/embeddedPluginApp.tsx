@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ComplexCaptureFixture } from './complexCaptureFixture';
 
 type PublishButtonProps = {
   label: string;
@@ -54,6 +55,8 @@ export const EmbeddedPluginApp = () => {
         </header>
 
         <main className='example-grid'>
+          <ComplexCaptureFixture />
+
           <StatusPanel />
 
           <PublishButton label='Publish iteration' variant='primary' />

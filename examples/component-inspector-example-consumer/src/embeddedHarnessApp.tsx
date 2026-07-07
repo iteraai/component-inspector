@@ -3,6 +3,7 @@ import {
   bootstrapEmbeddedInspectorBridge,
 } from '@iteraai/react-component-inspector';
 import { useEffect } from 'react';
+import { ComplexCaptureFixture } from './complexCaptureFixture';
 import { resolveExampleHostOrigins } from './exampleEmbeddedRuntimeConfig';
 import { createExampleHarnessAdapter } from './embeddedHarnessData';
 
@@ -61,6 +62,8 @@ export const EmbeddedHarnessApp = ({
         </header>
 
         <main data-inspector-node-id='root-app' className='example-grid'>
+          <ComplexCaptureFixture />
+
           <section
             data-inspector-node-id='checklist-panel'
             className='example-card example-card--panel'

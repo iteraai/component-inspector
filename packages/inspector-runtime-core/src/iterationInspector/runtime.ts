@@ -1473,7 +1473,13 @@ const resolvePreviewTargetElement = (
 
 const DEFAULT_ELEMENT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ELEMENT_CAPTURE_MAX_PIXELS = 16_777_216;
-const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 10_000;
+const DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS = 20_000;
+const DOM_RASTERIZATION_FONT_ATTEMPT_TIMEOUT_MS = 8_000;
+const DOM_RASTERIZATION_FALLBACK_TIMEOUT_MS =
+  DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS - DOM_RASTERIZATION_FONT_ATTEMPT_TIMEOUT_MS;
+const DOM_RASTERIZATION_RESOURCE_TIMEOUT_MS = 3_000;
+const TRANSPARENT_IMAGE_PLACEHOLDER =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
 const normalizeTrustedHostOrigins = (origins: readonly string[]) => {
   const normalizedOrigins = new Set<string>();
@@ -1640,6 +1646,64 @@ const canvasToBlob = (
       reject(error);
     }
   });
+};
+
+const createDomRasterizationFetchSignal = (win: Window) => {
+  const globalScope = win as unknown as {
+    AbortController?: typeof AbortController;
+    AbortSignal?: typeof AbortSignal & {
+      timeout?: (milliseconds: number) => AbortSignal;
+    };
+  };
+  const abortSignalConstructor = globalScope.AbortSignal as
+    | (typeof AbortSignal & {
+        timeout?: (milliseconds: number) => AbortSignal;
+      })
+    | undefined;
+
+  if (typeof abortSignalConstructor?.timeout === 'function') {
+    return abortSignalConstructor.timeout(DOM_RASTERIZATION_RESOURCE_TIMEOUT_MS);
+  }
+
+  if (typeof globalScope.AbortController !== 'function') {
+    return undefined;
+  }
+
+  const controller = new globalScope.AbortController();
+
+  win.setTimeout(() => {
+    controller.abort();
+  }, DOM_RASTERIZATION_RESOURCE_TIMEOUT_MS);
+
+  return controller.signal;
+};
+
+const createDomRasterizationOptions = (
+  rasterizedRect: IterationElementBounds,
+  dimensions: ElementCaptureDimensions,
+  win: Window,
+  options: {
+    skipFonts: boolean;
+  },
+) => {
+  const fetchSignal = createDomRasterizationFetchSignal(win);
+
+  return {
+    cacheBust: false,
+    fetchRequestInit:
+      fetchSignal === undefined
+        ? undefined
+        : {
+            signal: fetchSignal,
+          },
+    height: rasterizedRect.height,
+    imagePlaceholder: TRANSPARENT_IMAGE_PLACEHOLDER,
+    onImageErrorHandler: () => undefined,
+    pixelRatio: dimensions.scale,
+    skipFonts: options.skipFonts,
+    type: 'image/png',
+    width: rasterizedRect.width,
+  } as const;
 };
 
 const buildCaptureSuccess = (
@@ -2201,8 +2265,69 @@ const captureDomElement = async (
   resultRect: IterationElementBounds,
   dimensions: ElementCaptureDimensions,
   win: Window,
+  padding: number,
   crop?: DomRasterizationCrop,
 ): Promise<IterationElementCaptureResult> => {
+  const rasterizeDomElement = async (
+    options: {
+      skipFonts: boolean;
+      timeoutMs: number;
+    },
+  ) => {
+    const rasterizationOptions = createDomRasterizationOptions(
+      rasterizedRect,
+      dimensions,
+      win,
+      {
+        skipFonts: options.skipFonts,
+      },
+    );
+
+    if (crop === undefined && padding === 0) {
+      return withTimeout(
+        rasterizeElementToBlob(element, rasterizationOptions),
+        options.timeoutMs,
+        win,
+      );
+    }
+
+    return withTimeout(
+      rasterizeElementToCanvas(element, rasterizationOptions).then(
+        async (sourceCanvas) => {
+          const exportCanvas = element.ownerDocument.createElement('canvas');
+          exportCanvas.width = dimensions.width;
+          exportCanvas.height = dimensions.height;
+          const context = exportCanvas.getContext('2d');
+
+          if (context === null) {
+            return null;
+          }
+
+          const sourceX = crop?.offsetX ?? 0;
+          const sourceY = crop?.offsetY ?? 0;
+          const sourceWidth = crop?.width ?? rasterizedRect.width;
+          const sourceHeight = crop?.height ?? rasterizedRect.height;
+
+          context.drawImage(
+            sourceCanvas,
+            Math.round(sourceX * dimensions.scale),
+            Math.round(sourceY * dimensions.scale),
+            Math.max(1, Math.round(sourceWidth * dimensions.scale)),
+            Math.max(1, Math.round(sourceHeight * dimensions.scale)),
+            Math.round(padding * dimensions.scale),
+            Math.round(padding * dimensions.scale),
+            Math.max(1, Math.round(sourceWidth * dimensions.scale)),
+            Math.max(1, Math.round(sourceHeight * dimensions.scale)),
+          );
+
+          return canvasToBlob(exportCanvas, 'image/png');
+        },
+      ),
+      options.timeoutMs,
+      win,
+    );
+  };
+
   if (typeof rasterizeElementToBlob !== 'function') {
     return createElementCaptureFailure(
       'dom_rasterization_unavailable',
@@ -2211,70 +2336,53 @@ const captureDomElement = async (
     );
   }
 
+  let primaryError: unknown;
+  let blob: Blob | null = null;
+
   try {
-    const blob =
-      crop === undefined
-        ? await withTimeout(
-            rasterizeElementToBlob(element, {
-              cacheBust: true,
-              height: rasterizedRect.height,
-              pixelRatio: dimensions.scale,
-              type: 'image/png',
-              width: rasterizedRect.width,
-            }),
-            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
-            win,
-          )
-        : await withTimeout(
-            rasterizeElementToCanvas(element, {
-              cacheBust: true,
-              height: rasterizedRect.height,
-              pixelRatio: dimensions.scale,
-              width: rasterizedRect.width,
-            }).then(async (sourceCanvas) => {
-              const exportCanvas = element.ownerDocument.createElement('canvas');
-              exportCanvas.width = dimensions.width;
-              exportCanvas.height = dimensions.height;
-              const context = exportCanvas.getContext('2d');
+    blob = await rasterizeDomElement({
+      skipFonts: false,
+      timeoutMs: DOM_RASTERIZATION_FONT_ATTEMPT_TIMEOUT_MS,
+    });
+  } catch (error) {
+    primaryError = error;
+  }
 
-              if (context === null) {
-                return null;
-              }
+  if (blob === null) {
+    try {
+      blob = await rasterizeDomElement({
+        skipFonts: true,
+        timeoutMs: DOM_RASTERIZATION_FALLBACK_TIMEOUT_MS,
+      });
+    } catch (fallbackError) {
+      const fallbackDetail = getErrorDetail(fallbackError);
+      const primaryDetail = getErrorDetail(primaryError);
+      const detail =
+        primaryDetail === undefined || primaryDetail === fallbackDetail
+          ? fallbackDetail
+          : fallbackDetail === undefined
+            ? `Font-preserving attempt failed first: ${primaryDetail}`
+            : `${fallbackDetail} Font-preserving attempt failed first: ${primaryDetail}`;
 
-              context.drawImage(
-                sourceCanvas,
-                Math.round(crop.offsetX * dimensions.scale),
-                Math.round(crop.offsetY * dimensions.scale),
-                Math.max(1, Math.round(crop.width * dimensions.scale)),
-                Math.max(1, Math.round(crop.height * dimensions.scale)),
-                0,
-                0,
-                dimensions.width,
-                dimensions.height,
-              );
-
-              return canvasToBlob(exportCanvas, 'image/png');
-            }),
-            DEFAULT_DOM_RASTERIZATION_TIMEOUT_MS,
-            win,
-          );
-
-    if (blob === null) {
       return createElementCaptureFailure(
         'dom_rasterization_failed',
         win,
-        'DOM rasterizer returned no image data.',
+        detail,
       );
     }
+  }
 
-    return buildCaptureSuccess(blob, 'dom-rasterizer', resultRect, dimensions, win);
-  } catch (error) {
+  if (blob === null) {
     return createElementCaptureFailure(
       'dom_rasterization_failed',
       win,
-      getErrorDetail(error),
+      primaryError === undefined
+        ? 'DOM rasterizer returned no image data after retrying without font embedding.'
+        : `DOM rasterizer returned no image data after retrying without font embedding. Font-preserving attempt failed first: ${getErrorDetail(primaryError)}`,
     );
   }
+
+  return buildCaptureSuccess(blob, 'dom-rasterizer', resultRect, dimensions, win);
 };
 
 const getCurrentTextLocatorBounds = (
@@ -2385,22 +2493,10 @@ const captureElementCrop = async (
   const isImageElement = resolution.element instanceof elementGlobal.HTMLImageElement;
   const isDomElement = resolution.element instanceof elementGlobal.HTMLElement;
 
-  if (
-    !isCanvasElement &&
-    !isImageElement &&
-    isDomElement &&
-    (request.padding ?? 0) > 0
-  ) {
-    return createElementCaptureFailure(
-      'unsupported_target',
-      win,
-      'Padding is not supported for DOM rasterizer captures in this POC.',
-    );
-  }
-
   const elementRect = buildBoundsFromRect(
     resolution.element.getBoundingClientRect(),
   );
+  const padding = request.padding ?? 0;
   const isTextLocator = request.locator.targetKind === 'text';
   const textBounds =
     isTextLocator
@@ -2458,22 +2554,15 @@ const captureElementCrop = async (
     const canvasElement = resolution.element as HTMLCanvasElement;
 
     if (shouldRasterizeCanvasElement(canvasElement, win)) {
-      if ((request.padding ?? 0) > 0) {
-        result = createElementCaptureFailure(
-          'unsupported_target',
-          win,
-          'Padding is not supported for DOM rasterizer captures in this POC.',
-        );
-      } else {
-        result = await captureDomElement(
-          canvasElement,
-          domRasterizedRect,
-          rect,
-          dimensions,
-          win,
-          textSelectionCrop,
-        );
-      }
+      result = await captureDomElement(
+        canvasElement,
+        domRasterizedRect,
+        rect,
+        dimensions,
+        win,
+        padding,
+        textSelectionCrop,
+      );
     } else {
       result = await captureCanvasElement(
         canvasElement,
@@ -2488,22 +2577,15 @@ const captureElementCrop = async (
     const imageElement = resolution.element as HTMLImageElement;
 
     if (shouldRasterizeImageElement(imageElement, win)) {
-      if ((request.padding ?? 0) > 0) {
-        result = createElementCaptureFailure(
-          'unsupported_target',
-          win,
-          'Padding is not supported for DOM rasterizer captures in this POC.',
-        );
-      } else {
-        result = await captureDomElement(
-          imageElement,
-          domRasterizedRect,
-          rect,
-          dimensions,
-          win,
-          textSelectionCrop,
-        );
-      }
+      result = await captureDomElement(
+        imageElement,
+        domRasterizedRect,
+        rect,
+        dimensions,
+        win,
+        padding,
+        textSelectionCrop,
+      );
     } else {
       result = await captureImageElement(
         imageElement,
@@ -2521,6 +2603,7 @@ const captureElementCrop = async (
       rect,
       dimensions,
       win,
+      padding,
       textSelectionCrop,
     );
   } else {

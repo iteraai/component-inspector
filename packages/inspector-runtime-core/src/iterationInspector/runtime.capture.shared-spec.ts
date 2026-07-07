@@ -274,8 +274,14 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         context.target,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
+          fetchRequestInit: expect.objectContaining({
+            signal: expect.any(Object),
+          }),
+          imagePlaceholder: expect.stringMatching(/^data:image\/png;base64,/u),
           pixelRatio: 1,
+          skipFonts: false,
+          type: 'image/png',
         }),
       );
 
@@ -313,6 +319,47 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       context.runtime.stop();
     });
 
+    test('retries DOM rasterization without fonts when the font-preserving attempt fails', async () => {
+      vi.mocked(toBlob)
+        .mockRejectedValueOnce(new Error('Font embedding failed.'))
+        .mockResolvedValueOnce(
+          new Blob(['fallback-png'], { type: 'image/png' }),
+        );
+      const context = givenCaptureRuntime();
+
+      requestCapture(context.locator, { requestId: 'fallback-dom-capture' });
+      await flushCapture();
+
+      expect(toBlob).toHaveBeenCalledTimes(2);
+      expect(toBlob).toHaveBeenNthCalledWith(
+        1,
+        context.target,
+        expect.objectContaining({
+          skipFonts: false,
+        }),
+      );
+      expect(toBlob).toHaveBeenNthCalledWith(
+        2,
+        context.target,
+        expect.objectContaining({
+          skipFonts: true,
+        }),
+      );
+      expect(getCaptureMessage(context.postMessageSpy, 'fallback-dom-capture')).toEqual(
+        expect.objectContaining({
+          kind: 'element_crop_captured',
+          requestId: 'fallback-dom-capture',
+          result: expect.objectContaining({
+            status: 'captured',
+            blob: expect.any(Blob),
+            method: 'dom-rasterizer',
+          }),
+        }),
+      );
+
+      context.runtime.stop();
+    });
+
     test('sizes DOM rasterization from the measured capture rect', async () => {
       const context = givenCaptureRuntime();
       vi.mocked(context.target.getBoundingClientRect).mockReturnValue({
@@ -333,7 +380,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         context.target,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           height: 80,
           pixelRatio: 1,
           type: 'image/png',
@@ -1014,8 +1061,19 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       context.runtime.stop();
     });
 
-    test('returns unsupported_target for padded DOM rasterizer captures', async () => {
+    test('captures padded DOM rasterizer targets through a canvas export', async () => {
       const context = givenCaptureRuntime();
+      const sourceCanvas = document.createElement('canvas');
+      const drawImage = vi.fn();
+      vi.mocked(toCanvas).mockResolvedValue(sourceCanvas);
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        drawImage,
+      } as unknown as CanvasRenderingContext2D);
+      vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
+        function toBlob(callback: BlobCallback) {
+          callback(new Blob(['padded-dom'], { type: 'image/png' }));
+        },
+      );
 
       requestCapture(context.locator, {
         padding: 8,
@@ -1023,15 +1081,43 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       });
       await flushCapture();
 
-      expect(toBlob).not.toHaveBeenCalled();
+      expect(toBlob).not.toHaveBeenCalledWith(context.target, expect.anything());
+      expect(toCanvas).toHaveBeenCalledWith(
+        context.target,
+        expect.objectContaining({
+          cacheBust: false,
+          fetchRequestInit: expect.objectContaining({
+            signal: expect.any(Object),
+          }),
+          height: 40,
+          imagePlaceholder: expect.stringMatching(/^data:image\/png;base64,/u),
+          pixelRatio: 1,
+          skipFonts: false,
+          type: 'image/png',
+          width: 120,
+        }),
+      );
+      expect(drawImage).toHaveBeenCalledWith(
+        sourceCanvas,
+        0,
+        0,
+        120,
+        40,
+        8,
+        8,
+        120,
+        40,
+      );
       expect(getCaptureMessage(context.postMessageSpy, 'padded-dom-capture')).toEqual(
         expect.objectContaining({
           kind: 'element_crop_captured',
           requestId: 'padded-dom-capture',
           result: expect.objectContaining({
-            status: 'failed',
-            reason: 'unsupported_target',
-            detail: 'Padding is not supported for DOM rasterizer captures in this POC.',
+            status: 'captured',
+            blob: expect.any(Blob),
+            height: 56,
+            method: 'dom-rasterizer',
+            width: 136,
           }),
         }),
       );
@@ -1045,7 +1131,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       const context = givenCaptureRuntime();
 
       requestCapture(context.locator, { requestId: 'timeout-capture' });
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(20_000);
       await flushCapture();
 
       expect(getCaptureMessage(context.postMessageSpy, 'timeout-capture')).toEqual(
@@ -1055,7 +1141,8 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
           result: expect.objectContaining({
             status: 'failed',
             reason: 'dom_rasterization_failed',
-            detail: 'DOM rasterization timed out after 10000ms.',
+            detail:
+              'DOM rasterization timed out after 12000ms. Font-preserving attempt failed first: DOM rasterization timed out after 8000ms.',
           }),
         }),
       );
@@ -1429,7 +1516,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1478,7 +1565,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1527,7 +1614,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1576,7 +1663,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1625,7 +1712,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1674,7 +1761,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         image,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1721,7 +1808,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         canvas,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1768,7 +1855,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         canvas,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1817,7 +1904,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         canvas,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),
@@ -1864,7 +1951,7 @@ export const describeIterationInspectorRuntimeCaptureSuite = ({
       expect(toBlob).toHaveBeenCalledWith(
         canvas,
         expect.objectContaining({
-          cacheBust: true,
+          cacheBust: false,
           pixelRatio: 1,
           type: 'image/png',
         }),

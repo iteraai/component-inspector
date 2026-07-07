@@ -1,5 +1,19 @@
 # `@iteraai/vite-plugin-react-inspector`
 
+## 0.1.2
+
+### Patch Changes
+
+- Harden runtime-assisted element capture for production UI targets.
+
+  DOM rasterizer captures now support request padding by drawing rasterized output
+  into a padded PNG canvas instead of returning `unsupported_target`, and the DOM
+  rasterization timeout has been increased to give real application elements more
+  headroom before returning `dom_rasterization_failed`.
+
+- Updated dependencies
+  - @iteraai/react-component-inspector@0.5.1
+
 ## 0.1.1
 
 ### Patch Changes

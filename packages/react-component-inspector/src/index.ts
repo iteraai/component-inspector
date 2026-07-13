@@ -54,7 +54,7 @@ export {
   emitEmbeddedBridgeFiberFallbackMetric,
   emitEmbeddedBridgeLifecycleMetric,
   emitEmbeddedBridgeRejectionMetric,
-} from '../../inspector-runtime-core/src/security/bridgeTelemetry';
+} from './security/bridgeTelemetry';
 export type {
   EmbeddedBridgeFiberFallbackAdapterTarget,
   EmbeddedBridgeFiberFallbackReasonCode,
@@ -64,14 +64,14 @@ export type {
   EmbeddedBridgeRejectionReasonCode,
   EmbeddedBridgeRejectionTelemetryMetric,
   EmbeddedBridgeTelemetryHooks,
-} from '../../inspector-runtime-core/src/security/bridgeTelemetry';
+} from './security/bridgeTelemetry';
 export {
   validateHelloSessionToken,
   type InspectorBridgeSecurityOptions,
   type InspectorSessionTokenRejectionReason,
   type InspectorSessionTokenValidationResult,
   type InspectorSessionTokenValidator,
-} from '../../inspector-runtime-core/src/security/tokenValidation';
+} from './security/tokenValidation';
 export {
   bootIterationInspectorRuntime,
   buildIterationElementSelection,
@@ -103,4 +103,4 @@ export {
   type IterationPreviewEditValueType,
   type IterationPreviewTargetEdit,
   type IterationScrollOffset,
-} from './iterationInspector';
+} from './iterationInspector/index';

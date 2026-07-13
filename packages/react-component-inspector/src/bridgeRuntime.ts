@@ -7,8 +7,8 @@ import { createReactInspectorAdapter } from './adapters/base/createReactInspecto
 import type { ReactInspectorRuntimeConfig } from './adapters/base/types';
 import { toInspectorTreeAdapter } from './inspectorTreeAdapter';
 import type { ReactTreeAdapter } from './reactTreeAdapter';
-import type { EmbeddedBridgeTelemetryHooks } from '../../inspector-runtime-core/src/security/bridgeTelemetry';
-import type { InspectorBridgeSecurityOptions } from '../../inspector-runtime-core/src/security/tokenValidation';
+import type { EmbeddedBridgeTelemetryHooks } from './security/bridgeTelemetry';
+import type { InspectorBridgeSecurityOptions } from './security/tokenValidation';
 
 export type InspectorBridgeMode = 'development' | 'iteration' | 'production';
 

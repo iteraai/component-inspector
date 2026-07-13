@@ -148,7 +148,22 @@ const validatePackContents = (packageDefinition, packedFiles) => {
   }
 };
 
+const validateDeclarationArtifacts = (packageDefinition) => {
+  const distDirectory = path.join(packageDefinition.directory, 'dist');
+  const declarationPaths = fs.readdirSync(distDirectory, { recursive: true })
+    .filter((entry) => typeof entry === 'string' && entry.endsWith('.d.ts'));
+
+  for (const declarationPath of declarationPaths) {
+    const contents = fs.readFileSync(path.join(distDirectory, declarationPath), 'utf8');
+    assert(
+      !/(?:\.\.?\/)+[^'\"]*\/src\//.test(contents),
+      `${packageDefinition.name} declaration escapes to source: ${declarationPath}`,
+    );
+  }
+};
+
 const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
+  validateDeclarationArtifacts(packageDefinition);
   const rawPackResult = run(
     'npm',
     ['pack', '--json', '--pack-destination', packDestination, '--silent'],
@@ -192,6 +207,7 @@ const fixturePackageJson = (
     vue: '^3.5.0'
   },
   devDependencies: {
+    '@types/node': '^22.13.1',
     typescript: '~5.6.2',
     vite: '^6.0.5'
   }
@@ -203,9 +219,8 @@ const fixtureTsConfig = {
     module: 'ESNext',
     moduleResolution: 'Bundler',
     noEmit: true,
-    skipLibCheck: true,
     strict: true,
-    target: 'ES2020'
+    target: 'ESNext'
   },
   include: ['smoke-types.ts']
 };

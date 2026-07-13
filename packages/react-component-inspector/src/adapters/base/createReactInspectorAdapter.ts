@@ -24,7 +24,7 @@ import {
   emitEmbeddedBridgeFiberFallbackMetric,
   type EmbeddedBridgeFiberFallbackReasonCode,
   type EmbeddedBridgeTelemetryHooks,
-} from '../../../../inspector-runtime-core/src/security/bridgeTelemetry';
+} from '../../security/bridgeTelemetry';
 
 const emptyTreeSnapshot: InspectorTreeSnapshot = {
   nodes: [],

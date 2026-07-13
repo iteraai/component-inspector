@@ -163,7 +163,6 @@ const validateDeclarationArtifacts = (packageDefinition) => {
 };
 
 const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
-  validateDeclarationArtifacts(packageDefinition);
   const rawPackResult = run(
     'npm',
     ['pack', '--json', '--pack-destination', packDestination, '--silent'],
@@ -180,6 +179,7 @@ const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
   const [packResult] = JSON.parse(jsonPayload);
 
   validatePackContents(packageDefinition, packResult.files);
+  validateDeclarationArtifacts(packageDefinition);
 
   return path.join(packDestination, packResult.filename);
 };

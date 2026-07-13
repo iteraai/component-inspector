@@ -1,5 +1,13 @@
 # `@iteraai/vite-plugin-react-inspector`
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [b413bc4]
+  - @iteraai/inspector-protocol@0.2.0
+  - @iteraai/react-component-inspector@0.5.2
+
 ## 0.1.2
 
 ### Patch Changes

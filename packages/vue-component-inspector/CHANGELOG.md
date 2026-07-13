@@ -1,5 +1,13 @@
 # @iteraai/vue-component-inspector
 
+## 0.3.2
+
+### Patch Changes
+
+- b413bc4: Consolidate the iteration-inspector wire contract and validators in the shared protocol package while preserving framework compatibility exports.
+- Updated dependencies [b413bc4]
+  - @iteraai/inspector-protocol@0.2.0
+
 ## 0.3.1
 
 ### Patch Changes

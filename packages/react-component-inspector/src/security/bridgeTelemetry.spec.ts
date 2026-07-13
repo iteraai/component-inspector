@@ -15,7 +15,7 @@ import {
   type EmbeddedBridgeFiberFallbackTelemetryMetric,
   type EmbeddedBridgeLifecycleTelemetryMetric,
   type EmbeddedBridgeRejectionTelemetryMetric,
-} from './bridgeTelemetry';
+} from '../../../inspector-runtime-core/src/security/bridgeTelemetry';
 
 type BridgeTelemetryContext = {
   onFiberFallbackMetric: ReturnType<

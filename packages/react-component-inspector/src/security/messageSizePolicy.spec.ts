@@ -3,7 +3,7 @@ import {
   EMBEDDED_MAX_INBOUND_INSPECTOR_MESSAGE_BYTES,
   evaluateEmbeddedInboundMessageSize,
   type EmbeddedInboundMessageSizeResult,
-} from './messageSizePolicy';
+} from '../../../inspector-runtime-core/src/security/messageSizePolicy';
 
 type EmbeddedMessageSizePolicyContext = {
   message: unknown;

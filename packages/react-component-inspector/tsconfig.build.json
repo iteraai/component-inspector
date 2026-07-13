@@ -4,6 +4,7 @@
     "allowImportingTsExtensions": false,
     "declaration": true,
     "noEmit": false,
+    "paths": {},
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],

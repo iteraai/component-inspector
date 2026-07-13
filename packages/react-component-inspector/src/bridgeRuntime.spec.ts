@@ -8,7 +8,7 @@ import {
   initInspectorBridge,
   type InitInspectorBridgeOptions,
 } from './bridgeRuntime';
-import { inspectorHighlightOverlaySelector } from './highlighter';
+import { inspectorHighlightOverlaySelector } from '../../inspector-runtime-core/src/highlighter';
 import {
   MAX_TREE_SNAPSHOT_NODE_COUNT,
   type ReactTreeSnapshot,
@@ -16,8 +16,8 @@ import {
 import type {
   EmbeddedBridgeLifecycleTelemetryMetric,
   EmbeddedBridgeRejectionTelemetryMetric,
-} from './security/bridgeTelemetry';
-import { EMBEDDED_MAX_INBOUND_INSPECTOR_MESSAGE_BYTES } from './security/messageSizePolicy';
+} from '../../inspector-runtime-core/src/security/bridgeTelemetry';
+import { EMBEDDED_MAX_INBOUND_INSPECTOR_MESSAGE_BYTES } from '../../inspector-runtime-core/src/security/messageSizePolicy';
 
 type SourceDouble = {
   postMessage: ReturnType<typeof vi.fn>;

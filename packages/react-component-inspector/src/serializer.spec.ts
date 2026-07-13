@@ -3,7 +3,7 @@ import {
   serializeNodeProps,
   type SerializeNodePropsOptions,
   type SerializeNodePropsResult,
-} from './serializer';
+} from '../../inspector-runtime-core/src/serializer';
 
 type SerializerContext = {
   input: unknown;

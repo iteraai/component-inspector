@@ -18,6 +18,8 @@ const sdkPackages = [
       'README.md',
       'dist/index.js',
       'dist/index.d.ts',
+      'dist/iterationInspector.js',
+      'dist/iterationInspector.d.ts',
       'dist/errors.js',
       'dist/errors.d.ts',
       'dist/origins.js',
@@ -146,6 +148,20 @@ const validatePackContents = (packageDefinition, packedFiles) => {
   }
 };
 
+const validateDeclarationArtifacts = (packageDefinition) => {
+  const distDirectory = path.join(packageDefinition.directory, 'dist');
+  const declarationPaths = fs.readdirSync(distDirectory, { recursive: true })
+    .filter((entry) => typeof entry === 'string' && entry.endsWith('.d.ts'));
+
+  for (const declarationPath of declarationPaths) {
+    const contents = fs.readFileSync(path.join(distDirectory, declarationPath), 'utf8');
+    assert(
+      !/(?:\.\.?\/)+[^'\"]*\/src\//.test(contents),
+      `${packageDefinition.name} declaration escapes to source: ${declarationPath}`,
+    );
+  }
+};
+
 const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
   const rawPackResult = run(
     'npm',
@@ -163,6 +179,7 @@ const packPackage = (packageDefinition, packDestination, npmEnvironment) => {
   const [packResult] = JSON.parse(jsonPayload);
 
   validatePackContents(packageDefinition, packResult.files);
+  validateDeclarationArtifacts(packageDefinition);
 
   return path.join(packDestination, packResult.filename);
 };
@@ -190,6 +207,7 @@ const fixturePackageJson = (
     vue: '^3.5.0'
   },
   devDependencies: {
+    '@types/node': '^22.13.1',
     typescript: '~5.6.2',
     vite: '^6.0.5'
   }
@@ -201,9 +219,8 @@ const fixtureTsConfig = {
     module: 'ESNext',
     moduleResolution: 'Bundler',
     noEmit: true,
-    skipLibCheck: true,
     strict: true,
-    target: 'ES2020'
+    target: 'ESNext'
   },
   include: ['smoke-types.ts']
 };
@@ -216,6 +233,11 @@ import { createInspectorProtocolError } from '@iteraai/inspector-protocol/errors
 import { normalizeOrigin } from '@iteraai/inspector-protocol/origins';
 import type { TreeNode } from '@iteraai/inspector-protocol/types';
 import { isInspectorMessage } from '@iteraai/inspector-protocol/validators';
+import {
+  ITERATION_INSPECTOR_CHANNEL as PROTOCOL_ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorRuntimeMessage as isProtocolIterationInspectorRuntimeMessage,
+  type IterationInspectorRuntimeMessage as ProtocolIterationInspectorRuntimeMessage,
+} from '@iteraai/inspector-protocol/iterationInspector';
 import {
   angularInspectorRequiredDevModeGlobalNames,
   resolveAngularInspectorRuntimeConfig,
@@ -285,6 +307,11 @@ const angularRuntimeMessage: AngularIterationInspectorRuntimeMessage = {
   kind: 'runtime_ready',
   urlPath: '/',
 };
+const protocolRuntimeMessage: ProtocolIterationInspectorRuntimeMessage = {
+  channel: PROTOCOL_ITERATION_INSPECTOR_CHANNEL,
+  kind: 'runtime_ready',
+  urlPath: '/',
+};
 const angularBootstrapFn: typeof bootstrapAngularEmbeddedInspectorBridge =
   bootstrapAngularEmbeddedInspectorBridge;
 const initAngularBridgeFn: typeof initAngularInspectorBridge =
@@ -342,6 +369,7 @@ const resolvedVueRuntimeConfig = resolveVueInspectorRuntimeConfig(
 
 void treeNode;
 void angularRuntimeMessage;
+void protocolRuntimeMessage;
 void angularBootstrapFn;
 void initAngularBridgeFn;
 void runtimeMessage;
@@ -368,6 +396,10 @@ if (!isPingMessage || protocolError.code !== 'ERR_NODE_NOT_FOUND') {
 if (resolvedOrigin !== 'https://itera.ai') {
   throw new Error('Origin helper smoke typing failed.');
 }
+
+if (!isProtocolIterationInspectorRuntimeMessage(protocolRuntimeMessage)) {
+  throw new Error('Iteration inspector protocol smoke typing failed.');
+}
 `;
 
 const fixtureRuntimeSmoke = `import assert from 'node:assert/strict';
@@ -379,6 +411,11 @@ import {
 import { createInspectorProtocolError } from '@iteraai/inspector-protocol/errors';
 import { normalizeOrigin } from '@iteraai/inspector-protocol/origins';
 import { isInspectorMessage } from '@iteraai/inspector-protocol/validators';
+import {
+  ITERATION_INSPECTOR_CHANNEL as PROTOCOL_ITERATION_INSPECTOR_CHANNEL,
+  isIterationInspectorParentMessage as isProtocolIterationInspectorParentMessage,
+  isIterationInspectorRuntimeMessage as isProtocolIterationInspectorRuntimeMessage,
+} from '@iteraai/inspector-protocol/iterationInspector';
 import {
   angularInspectorRequiredDevModeGlobalNames,
   angularInspectorRuntimeAdapterTargets,
@@ -541,6 +578,10 @@ assert.deepEqual(
 );
 assert.equal(typeof bootstrapEmbeddedInspectorBridge, 'function');
 assert.equal(typeof initReactInspectorBridge, 'function');
+assert.equal(ITERATION_INSPECTOR_CHANNEL, PROTOCOL_ITERATION_INSPECTOR_CHANNEL);
+assert.equal(isIterationInspectorRuntimeMessage, isProtocolIterationInspectorRuntimeMessage);
+assert.equal(isVueIterationInspectorRuntimeMessage, isProtocolIterationInspectorRuntimeMessage);
+assert.equal(isVueIterationInspectorParentMessage, isProtocolIterationInspectorParentMessage);
 assert.equal(typeof initStorybookManagerRelay, 'function');
 assert.equal(typeof createIteraReactInspectorVitePlugin, 'function');
 assert.equal(iteraReactInspector, createIteraReactInspectorVitePlugin);

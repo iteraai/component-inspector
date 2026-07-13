@@ -6,7 +6,7 @@ import {
   EMBEDDED_BRIDGE_TELEMETRY_METRIC_NAME_FIBER_FALLBACK,
   EMBEDDED_BRIDGE_TELEMETRY_SCHEMA_VERSION,
   type EmbeddedBridgeFiberFallbackTelemetryMetric,
-} from '../../security/bridgeTelemetry';
+} from '../../../../inspector-runtime-core/src/security/bridgeTelemetry';
 
 type AdapterFactoryContext = {
   onFiberFallbackMetric: ReturnType<

@@ -103,4 +103,4 @@ export {
   type IterationPreviewEditValueType,
   type IterationPreviewTargetEdit,
   type IterationScrollOffset,
-} from './iterationInspector';
+} from './iterationInspector/index';

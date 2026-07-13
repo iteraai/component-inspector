@@ -1,4 +1,5 @@
 export * from './errors';
+export * from './iterationInspector';
 export * from './origins';
 export * from './securityEvents';
 export * from './types';

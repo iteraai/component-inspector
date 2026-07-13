@@ -17,6 +17,7 @@ import {
 } from './index';
 import * as errorsModule from './errors';
 import * as indexModule from './index';
+import * as iterationInspectorModule from './iterationInspector';
 import * as originsModule from './origins';
 import * as typesModule from './types';
 import * as validatorsModule from './validators';
@@ -33,6 +34,7 @@ type ProtocolContractContext = {
   originsExportKeys?: string[];
   typesExportKeys?: string[];
   validatorsExportKeys?: string[];
+  iterationInspectorExportKeys?: string[];
 };
 
 type ProtocolGuardContext = {
@@ -67,6 +69,7 @@ const contractInventoryCollected = (
     originsExportKeys: getRuntimeExportKeys(originsModule),
     typesExportKeys: getRuntimeExportKeys(typesModule),
     validatorsExportKeys: getRuntimeExportKeys(validatorsModule),
+    iterationInspectorExportKeys: getRuntimeExportKeys(iterationInspectorModule),
   };
 };
 
@@ -79,6 +82,10 @@ const expectCurrentPublicEntryPoints = (context: ProtocolContractContext) => {
     './types': {
       types: './dist/types.d.ts',
       import: './dist/types.js',
+    },
+    './iterationInspector': {
+      types: './dist/iterationInspector.d.ts',
+      import: './dist/iterationInspector.js',
     },
     './errors': {
       types: './dist/errors.d.ts',
@@ -93,7 +100,7 @@ const expectCurrentPublicEntryPoints = (context: ProtocolContractContext) => {
       import: './dist/origins.js',
     },
   });
-  expect(context.rootExportKeys).toStrictEqual([
+  const priorRootExportKeys = [
     'INSPECTOR_CHANNEL',
     'INSPECTOR_PROTOCOL_VERSION',
     'INSPECTOR_SECURITY_EVENT_NAME_MESSAGE_REJECTED',
@@ -114,7 +121,27 @@ const expectCurrentPublicEntryPoints = (context: ProtocolContractContext) => {
     'normalizeOrigin',
     'parseMessage',
     'serializablePlaceholderTypes',
-  ]);
+  ];
+  const iterationInspectorRootExportKeys = [
+    'ITERATION_INSPECTOR_CHANNEL',
+    'isIterationInspectorParentMessage',
+    'isIterationInspectorRuntimeMessage',
+    'iterationElementCaptureFailureReasons',
+    'iterationInspectorRuntimeCapabilities',
+    'iterationPreviewEditErrorCodes',
+  ];
+  expect(
+    context.rootExportKeys?.filter(
+      (key) => !iterationInspectorRootExportKeys.includes(key),
+    ),
+  ).toStrictEqual(priorRootExportKeys);
+  expect(context.iterationInspectorExportKeys).toStrictEqual(
+    iterationInspectorRootExportKeys,
+  );
+  expect(context.rootExportKeys).toStrictEqual([
+    ...priorRootExportKeys,
+    ...iterationInspectorRootExportKeys,
+  ].sort());
   expect(context.errorsExportKeys).toStrictEqual([
     'createInspectorProtocolError',
     'inspectorErrorCodes',

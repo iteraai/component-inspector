@@ -4,6 +4,7 @@ import dts from 'vite-plugin-dts';
 
 const entryPoints = {
   index: path.resolve(__dirname, 'src/index.ts'),
+  iterationInspector: path.resolve(__dirname, 'src/iterationInspector.ts'),
   types: path.resolve(__dirname, 'src/types.ts'),
   errors: path.resolve(__dirname, 'src/errors.ts'),
   validators: path.resolve(__dirname, 'src/validators.ts'),

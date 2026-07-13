@@ -8,7 +8,7 @@ import {
   mapTokenValidationRejectionToSecurityReasonCode,
   type EmbeddedInspectorSecurityRejectionEvent,
   type InspectorSecurityReasonCode,
-} from './inspectorSecurityEvents';
+} from '../../../inspector-runtime-core/src/security/inspectorSecurityEvents';
 
 type SecurityEventsContext = {
   logger: ReturnType<

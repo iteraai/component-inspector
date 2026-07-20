@@ -28,6 +28,14 @@ const readPackageDependencies = (): Record<string, string> => {
   return packageJson.dependencies;
 };
 
+const readPackagePeerDependencies = (): Record<string, string> => {
+  const packageJson = require('../package.json') as {
+    peerDependencies: Record<string, string>;
+  };
+
+  return packageJson.peerDependencies;
+};
+
 const readReactInspectorPackageVersion = (): string => {
   const packageJson = require('../../react-component-inspector/package.json') as {
     version: string;
@@ -55,6 +63,7 @@ describe('public contract', () => {
     expect(
       readPackageDependencies()['@iteraai/react-component-inspector'],
     ).toBe(readReactInspectorPackageVersion());
+    expect(readPackagePeerDependencies().vite).toBe('>=5.0.0');
     expect(typeof createIteraReactInspectorVitePlugin).toBe('function');
     expect(iteraReactInspector).toBe(createIteraReactInspectorVitePlugin);
   });

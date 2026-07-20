@@ -14,6 +14,7 @@ Your app should already provide React and React DOM:
 
 - `react`: `^18.3.0 || ^19.0.0`
 - `react-dom`: `^18.3.0 || ^19.0.0`
+- `vite`: `>=5.0.0` (validated with Vite 5, 6, 7, and 8)
 
 ## Manual React-Vite Usage
 

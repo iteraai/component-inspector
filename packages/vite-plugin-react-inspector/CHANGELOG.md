@@ -1,5 +1,11 @@
 # `@iteraai/vite-plugin-react-inspector`
 
+## 0.1.5
+
+### Patch Changes
+
+- 1ec222e: Allow React Vite inspector consumers on Vite 5 and later to resolve the plugin without a peer dependency conflict.
+
 ## 0.1.4
 
 ### Patch Changes

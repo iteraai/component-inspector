@@ -23,7 +23,7 @@
   "dependencies": {
     "@iteraai/inspector-protocol": "0.2.0",
     "@iteraai/react-component-inspector": "0.5.3",
-    "@iteraai/vite-plugin-react-inspector": "0.1.4",
+    "@iteraai/vite-plugin-react-inspector": "0.1.5",
     "@iteraai/vue-component-inspector": "0.3.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",

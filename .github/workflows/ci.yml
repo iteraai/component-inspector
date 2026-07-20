@@ -53,6 +53,8 @@ jobs:
             command: npm run docs-drift:check
           - name: unit-test
             command: npm run test
+          - name: vite-plugin-compatibility
+            command: npm run test:compatibility --workspace @iteraai/vite-plugin-react-inspector
           - name: example-smoke-react
             command: npm run test:examples:react
           - name: example-smoke-angular

@@ -1,5 +1,13 @@
 # `@iteraai/vite-plugin-react-inspector`
 
+## 0.1.4
+
+### Patch Changes
+
+- fc0f970: Configure trusted iteration-runtime origins from bridge bootstrap and safely reconcile duplicate runtime bootstraps.
+- Updated dependencies [fc0f970]
+  - @iteraai/react-component-inspector@0.5.3
+
 ## 0.1.3
 
 ### Patch Changes

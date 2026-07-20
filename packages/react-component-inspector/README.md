@@ -54,16 +54,14 @@ const bridge = bootstrapEmbeddedInspectorBridge({
   hostOrigins,
 });
 
-bootIterationInspectorRuntime({
-  hostOrigins,
-});
+bootIterationInspectorRuntime();
 
 window.addEventListener("beforeunload", () => {
   bridge.destroy();
 });
 ```
 
-Initialize the bridge and iteration runtime during client startup, not from inside the mounted React tree. Keep the bootstrap as early as possible so the default `fiber` path can install the inline backend hook before React hydration or `ReactDOM.createRoot(...)` makes the app interactive. Pass trusted host origins to the iteration runtime when the host needs element capture; otherwise `element_capture_v1` is not advertised.
+Initialize the bridge and iteration runtime during client startup, not from inside the mounted React tree. Keep the bootstrap as early as possible so the default `fiber` path can install the inline backend hook before React hydration or `ReactDOM.createRoot(...)` makes the app interactive. Configure trusted host origins once on the bridge bootstrap; the iteration runtime consumes that resolved configuration when it boots. Without trusted bridge origins, `element_capture_v1` is not advertised.
 
 ## Package Surface Summary
 

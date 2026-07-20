@@ -135,7 +135,6 @@ export const bootstrapEmbeddedInspectorBridge = (
     enabled: options.enabled && !killSwitchActive,
     ...options.runtimeTelemetry,
   });
-
   return {
     destroy: () => {
       runtimeTelemetry.destroy();

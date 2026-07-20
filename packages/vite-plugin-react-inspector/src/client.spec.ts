@@ -173,7 +173,7 @@ describe('React inspector Vite client runtime', () => {
     ).not.toHaveBeenCalled();
   });
 
-  test('starts the bridge and cleans up on dispose', async () => {
+  test('starts the configured iteration runtime before the bridge and cleans up on dispose', async () => {
     const fakeWindow = installFakeWindow();
     const stop = bootIteraReactInspectorViteRuntime({
       enabled: true,
@@ -182,11 +182,18 @@ describe('React inspector Vite client runtime', () => {
     });
 
     expect(
+      inspectorRuntimeMocks.bootIterationInspectorRuntime,
+    ).toHaveBeenCalledTimes(1);
+    expect(
       inspectorRuntimeMocks.bootstrapEmbeddedInspectorBridge,
     ).toHaveBeenCalledTimes(1);
     expect(
-      inspectorRuntimeMocks.bootIterationInspectorRuntime,
-    ).not.toHaveBeenCalled();
+      inspectorRuntimeMocks.bootIterationInspectorRuntime.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      inspectorRuntimeMocks.bootstrapEmbeddedInspectorBridge.mock
+        .invocationCallOrder[0],
+    );
     expect(
       inspectorRuntimeMocks.bootstrapEmbeddedInspectorBridge,
     ).toHaveBeenCalledWith({
@@ -215,6 +222,41 @@ describe('React inspector Vite client runtime', () => {
     expect(inspectorRuntimeMocks.runtimeStopSpy).toHaveBeenCalledTimes(1);
     expect(inspectorRuntimeMocks.bridgeDestroySpy).toHaveBeenCalledTimes(1);
     expect(fakeWindow.__listenerCount('beforeunload')).toBe(0);
+  });
+
+  test('configures the injected runtime before an application bootstrap can claim the singleton', async () => {
+    installFakeWindow();
+    const applicationBootstrap = vi.fn(() => {
+      inspectorRuntimeMocks.bootIterationInspectorRuntime();
+    });
+
+    inspectorRuntimeMocks.bootstrapEmbeddedInspectorBridge.mockImplementation(
+      () => {
+        applicationBootstrap();
+
+        return {
+          destroy: inspectorRuntimeMocks.bridgeDestroySpy,
+        };
+      },
+    );
+
+    bootIteraReactInspectorViteRuntime({
+      enabled: true,
+      hostOrigins: ['https://app.iteradev.ai'],
+      stateKey: '__TEST_INJECTED_BOOTSTRAP_RACE__',
+    });
+
+    expect(applicationBootstrap).toHaveBeenCalledTimes(1);
+    expect(inspectorRuntimeMocks.bootIterationInspectorRuntime).toHaveBeenCalledTimes(
+      2,
+    );
+    expect(inspectorRuntimeMocks.bootIterationInspectorRuntime).toHaveBeenNthCalledWith(
+      1,
+      { hostOrigins: ['https://app.iteradev.ai'] },
+    );
+    expect(inspectorRuntimeMocks.bootIterationInspectorRuntime).toHaveBeenNthCalledWith(
+      2,
+    );
   });
 
   test('replays early inspector host messages after the bridge starts', async () => {

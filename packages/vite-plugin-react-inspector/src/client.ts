@@ -1,6 +1,9 @@
 import { INSPECTOR_CHANNEL } from '@iteraai/inspector-protocol';
 import { bootstrapEmbeddedInspectorBridge } from '@iteraai/react-component-inspector/embeddedBootstrap';
-import type { IterationInspectorRuntime } from '@iteraai/react-component-inspector/iterationInspector';
+import {
+  bootIterationInspectorRuntime,
+  type IterationInspectorRuntime,
+} from '@iteraai/react-component-inspector/iterationInspector';
 
 export type IteraReactInspectorViteRuntimeOptions = {
   enabled: boolean;
@@ -197,11 +200,10 @@ const createEarlyInspectorMessageQueue = (
   };
 };
 
-const startRuntime = async (
+const startRuntime = (
   win: Window,
   options: ReturnType<typeof resolveRuntimeOptions>,
   ownerToken: BootstrapOwnerToken,
-  isDisposed: () => boolean,
 ) => {
   const existingState = readBootstrapState(win, options.stateKey);
 
@@ -266,31 +268,31 @@ const startRuntime = async (
   win.addEventListener('beforeunload', stop);
 
   try {
-    bridge = bootstrapEmbeddedInspectorBridge({
-      enabled: true,
-      hostOrigins: options.hostOrigins,
-    });
-    earlyInspectorMessages.replay();
-
-    const iterationModule = await import(
-      '@iteraai/react-component-inspector/iterationInspector'
-    );
-
-    if (isDisposed() || stopped) {
-      stop();
-      return;
-    }
-
     const existingIterationRuntime =
       toRuntimeWindow(win).__ITERA_ITERATION_INSPECTOR_RUNTIME__;
 
-    runtime = iterationModule.bootIterationInspectorRuntime({
+    runtime = bootIterationInspectorRuntime({
       hostOrigins: options.hostOrigins,
     });
     ownsIterationRuntime =
       runtime !== null &&
       runtime !== undefined &&
       runtime !== existingIterationRuntime;
+
+    if (runtime === null) {
+      stop();
+      warn(
+        options.warningPrefix,
+        'Failed to start the React inspector runtime with the configured trusted host origins.',
+      );
+      return;
+    }
+
+    bridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: options.hostOrigins,
+    });
+    earlyInspectorMessages.replay();
 
     writeBootstrapState(win, options.stateKey, {
       started: true,
@@ -317,12 +319,10 @@ export const bootIteraReactInspectorViteRuntime = (
 
   const resolvedOptions = resolveRuntimeOptions(options);
   const ownerToken = Symbol('iteraReactInspectorViteBootstrap');
-  let disposed = false;
 
-  void startRuntime(window, resolvedOptions, ownerToken, () => disposed);
+  startRuntime(window, resolvedOptions, ownerToken);
 
   return () => {
-    disposed = true;
     stopActiveBootstrap(window, resolvedOptions.stateKey, ownerToken);
   };
 };

@@ -48,10 +48,11 @@ import { bootIterationInspectorRuntime } from '@iteraai/vue-component-inspector/
 import App from './App.vue';
 
 const app = createApp(App);
+const hostOrigins = ['https://app.iteradev.ai', 'https://preview.iteradev.ai'];
 
 const bridge = bootstrapEmbeddedInspectorBridgeOnMount(app, {
   enabled: true,
-  hostOrigins: ['https://app.iteradev.ai', 'https://preview.iteradev.ai'],
+  hostOrigins,
 });
 
 bootIterationInspectorRuntime();

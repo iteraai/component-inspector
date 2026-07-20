@@ -38,7 +38,8 @@ import { bootIterationInspectorRuntime } from '@iteraai/angular-component-inspec
 import { AppComponent } from './app/app.component';
 import { appConfig } from './app/app.config';
 
-const bridge = initDevEmbeddedInspectorBridge();
+const hostOrigins = ['https://app.iteradev.ai'];
+const bridge = initDevEmbeddedInspectorBridge({ hostOrigins });
 
 bootIterationInspectorRuntime();
 bootstrapApplication(AppComponent, appConfig);

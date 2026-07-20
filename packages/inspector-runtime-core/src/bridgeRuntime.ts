@@ -11,6 +11,7 @@ import {
   type SnapshotPayload,
 } from '@iteraai/inspector-protocol';
 import { createInspectorHighlighter } from './highlighter';
+import { registerIterationInspectorBridgeHostOrigins } from './iterationInspector/bridgeHostOrigins';
 import {
   capTreeSnapshot,
   type InspectorTreeAdapter,
@@ -131,6 +132,12 @@ const hostMessageTypeSet = new Set<HostToEmbeddedMessageType>([
 ]);
 
 let activeBridge: InspectorBridge | undefined;
+let releaseActiveBridgeHostOrigins: (() => void) | undefined;
+
+const clearActiveBridgeHostOrigins = () => {
+  releaseActiveBridgeHostOrigins?.();
+  releaseActiveBridgeHostOrigins = undefined;
+};
 
 const isHostToEmbeddedMessage = (
   message: AnyInspectorMessage,
@@ -895,6 +902,8 @@ export const initInspectorBridge = (
     activeBridge.destroy();
   }
 
+  clearActiveBridgeHostOrigins();
+
   if (!shouldEnableBridge(options)) {
     if (options.killSwitchActive === true) {
       console.warn(
@@ -903,13 +912,21 @@ export const initInspectorBridge = (
       );
     }
 
-    activeBridge = {
+    const bridge = {
       destroy: () => {
-        activeBridge = undefined;
+        if (activeBridge === bridge) {
+          activeBridge = undefined;
+          clearActiveBridgeHostOrigins();
+        }
       },
     };
-    return activeBridge;
+    activeBridge = bridge;
+    return bridge;
   }
+
+  releaseActiveBridgeHostOrigins = registerIterationInspectorBridgeHostOrigins(
+    options.hostOrigins,
+  );
 
   const resolvedOptions = resolveInitOptions(options);
   const highlighter = createInspectorHighlighter();
@@ -1101,8 +1118,12 @@ export const initInspectorBridge = (
     resolvedOptions.telemetry,
   );
 
-  activeBridge = {
+  const bridge = {
     destroy: () => {
+      if (activeBridge !== bridge) {
+        return;
+      }
+
       window.removeEventListener('message', onMessage);
       window.removeEventListener('popstate', handleNavigation);
       window.removeEventListener('hashchange', handleNavigation);
@@ -1129,13 +1150,13 @@ export const initInspectorBridge = (
         delete window.__ARA_EMBEDDED_INSPECTOR_SELECTION__;
       }
 
-      if (activeBridge !== undefined) {
-        activeBridge = undefined;
-      }
+      activeBridge = undefined;
+      clearActiveBridgeHostOrigins();
     },
   };
 
-  return activeBridge;
+  activeBridge = bridge;
+  return bridge;
 };
 
 export const destroyInspectorBridge = () => {

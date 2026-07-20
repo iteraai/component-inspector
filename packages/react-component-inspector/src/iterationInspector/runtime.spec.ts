@@ -1,12 +1,20 @@
 import { given } from '#test/givenWhenThen';
+import { toBlob } from 'html-to-image';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationInspectorRuntimeMessage,
 } from './types';
 import {
   buildIterationElementSelection,
+  bootIterationInspectorRuntime,
   createIterationInspectorRuntime,
 } from './runtime';
+import { bootstrapEmbeddedInspectorBridge } from '../embeddedBootstrap';
+
+vi.mock('html-to-image', () => ({
+  toBlob: vi.fn(),
+  toCanvas: vi.fn(),
+}));
 
 const getPostedMessages = (spy: ReturnType<typeof vi.spyOn>) =>
   spy.mock.calls
@@ -1356,10 +1364,308 @@ describe('iterationInspector runtime', () => {
       'elementFromPoint',
     );
     delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+    delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME_HOST_ORIGINS__;
     delete window.__ITERA_EMBEDDED_INSPECTOR_SELECTION__;
     delete window.__ITERA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
     delete window.__ARA_EMBEDDED_INSPECTOR_SELECTION__;
     delete window.__ARA_EMBEDDED_REACT_INSPECTOR_SELECTION__;
+  });
+
+  test('upgrades an origin-less singleton, keeps compatible origins, and rejects conflicts', () => {
+    const originlessRuntime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(originlessRuntime).not.toBeNull();
+
+    const configuredRuntime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://app.iteradev.ai/editor'],
+    });
+
+    expect(configuredRuntime).not.toBeNull();
+    expect(configuredRuntime).not.toBe(originlessRuntime);
+    expect(originlessRuntime?.isActive()).toBe(false);
+
+    expect(
+      bootIterationInspectorRuntime({
+        allowSelfMessaging: true,
+        hostOrigins: ['https://app.iteradev.ai'],
+      }),
+    ).toBe(configuredRuntime);
+    expect(
+      bootIterationInspectorRuntime({
+        allowSelfMessaging: true,
+        hostOrigins: ['https://untrusted.iteradev.ai'],
+      }),
+    ).toBeNull();
+
+    configuredRuntime?.stop();
+  });
+
+  test('advertises element capture only after trusted origins are configured', () => {
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+
+    const runtime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+      hostOrigins: ['https://app.iteradev.ai'],
+    });
+
+    expect(runtime).not.toBeNull();
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: expect.arrayContaining(['element_capture_v1']),
+      }),
+    );
+
+    runtime?.stop();
+  });
+
+  test('uses the trusted origins resolved by bridge bootstrap when runtime boot omits them', async () => {
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const bridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://app.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+
+    const runtime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(runtime).not.toBeNull();
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: expect.arrayContaining(['element_capture_v1']),
+      }),
+    );
+    expect(
+      bootIterationInspectorRuntime({
+        allowSelfMessaging: true,
+        hostOrigins: ['https://untrusted.iteradev.ai'],
+      }),
+    ).toBeNull();
+
+    document.body.innerHTML = '<div id="capture-target">Capture me</div>';
+    const target = document.getElementById('capture-target');
+    expect(target).not.toBeNull();
+    assert(target instanceof HTMLDivElement);
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue({
+      top: 12,
+      left: 24,
+      width: 120,
+      height: 40,
+      right: 144,
+      bottom: 52,
+      x: 24,
+      y: 12,
+      toJSON: () => ({}),
+    });
+    vi.mocked(toBlob).mockResolvedValue(
+      new Blob(['trusted-crop'], { type: 'image/png' }),
+    );
+    const locator = buildIterationElementSelection(target).element;
+
+    const captureRequest = (origin: string, requestId: string) => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            channel: ITERATION_INSPECTOR_CHANNEL,
+            kind: 'capture_element_crop',
+            requestId,
+            locator,
+            format: 'image/png',
+          },
+          origin,
+          source: window,
+        }),
+      );
+    };
+
+    captureRequest('https://app.iteradev.ai', 'trusted-bridge-capture');
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'element_crop_captured',
+        requestId: 'trusted-bridge-capture',
+        result: expect.objectContaining({ status: 'captured' }),
+      }),
+    );
+
+    captureRequest('https://untrusted.iteradev.ai', 'untrusted-bridge-capture');
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(toBlob).toHaveBeenCalledTimes(1);
+    expect(getPostedMessages(postMessageSpy)).not.toContainEqual(
+      expect.objectContaining({ requestId: 'untrusted-bridge-capture' }),
+    );
+
+    const conflictingBridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://conflicting.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+
+    expect(
+      bootIterationInspectorRuntime({ allowSelfMessaging: true }),
+    ).toBeNull();
+
+    conflictingBridge.destroy();
+    expect(
+      bootIterationInspectorRuntime({ allowSelfMessaging: true }),
+    ).toBe(runtime);
+
+    runtime?.stop();
+    bridge.destroy();
+    delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+    delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME_HOST_ORIGINS__;
+    postMessageSpy.mockClear();
+
+    const unconfiguredRuntime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    );
+
+    unconfiguredRuntime?.stop();
+  });
+
+  test('fails closed when bridge bootstrap resolves no trusted host origins', () => {
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const bridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['not a valid origin'],
+      installInlineBackendHook: false,
+    });
+    const runtime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    );
+
+    document.body.innerHTML = '<button id="untrusted-button">Untrusted</button>';
+    const button = document.getElementById('untrusted-button');
+    expect(button).not.toBeNull();
+    assert(button instanceof HTMLButtonElement);
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          channel: ITERATION_INSPECTOR_CHANNEL,
+          kind: 'enter_select_mode',
+        },
+        origin: 'https://attacker.example',
+        source: window,
+      }),
+    );
+    button.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(getPostedSelectionMessages(postMessageSpy)).toEqual([]);
+
+    runtime?.stop();
+    bridge.destroy();
+  });
+
+  test('does not retain a replaced bridge origin configuration after the replacement is destroyed', () => {
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const firstBridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://first.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+    const replacementBridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://replacement.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+
+    replacementBridge.destroy();
+
+    const runtime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: ['preview_edits_v1'],
+      }),
+    );
+
+    runtime?.stop();
+    firstBridge.destroy();
+  });
+
+  test('keeps the replacement bridge active when a stale bridge handle is destroyed', () => {
+    const postMessageSpy = vi
+      .spyOn(window, 'postMessage')
+      .mockImplementation(() => undefined);
+    const firstBridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://first.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+    const replacementBridge = bootstrapEmbeddedInspectorBridge({
+      enabled: true,
+      hostOrigins: ['https://replacement.iteradev.ai'],
+      installInlineBackendHook: false,
+    });
+    const replacementPushState = window.history.pushState;
+
+    firstBridge.destroy();
+
+    expect(window.history.pushState).toBe(replacementPushState);
+    expect(
+      bootIterationInspectorRuntime({
+        allowSelfMessaging: true,
+        hostOrigins: ['https://first.iteradev.ai'],
+      }),
+    ).toBeNull();
+
+    const runtime = bootIterationInspectorRuntime({
+      allowSelfMessaging: true,
+    });
+
+    expect(getPostedMessages(postMessageSpy)).toContainEqual(
+      expect.objectContaining({
+        kind: 'runtime_ready',
+        capabilities: expect.arrayContaining(['element_capture_v1']),
+      }),
+    );
+
+    runtime?.stop();
+    replacementBridge.destroy();
   });
 
   test('builds deterministic element snapshots and display text', () => {

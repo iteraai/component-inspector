@@ -40,14 +40,16 @@ export const bootstrapNextjsInstrumentationClient = (
     env.NEXT_PUBLIC_ITERA_COMPONENT_INSPECTOR_HOST_ORIGINS,
   );
 
-  bootIterationInspectorRuntime();
-
   if (hostOrigins.length === 0) {
     return null;
   }
 
-  return initDevEmbeddedInspectorBridge({
+  const bridge = initDevEmbeddedInspectorBridge({
     enabled: true,
     hostOrigins,
   });
+
+  bootIterationInspectorRuntime();
+
+  return bridge;
 };

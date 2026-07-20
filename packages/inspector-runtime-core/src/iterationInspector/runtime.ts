@@ -3,6 +3,7 @@ import {
   toCanvas as rasterizeElementToCanvas,
 } from 'html-to-image';
 import { isOriginTrusted, normalizeOrigin } from '@iteraai/inspector-protocol';
+import { resolveIterationInspectorRuntimeHostOrigins } from './bridgeHostOrigins';
 import {
   ITERATION_INSPECTOR_CHANNEL,
   IterationElementBounds,
@@ -147,6 +148,7 @@ export type IterationInspectorRuntime = {
 declare global {
   interface Window {
     __ITERA_ITERATION_INSPECTOR_RUNTIME__?: IterationInspectorRuntime;
+    __ITERA_ITERATION_INSPECTOR_RUNTIME_HOST_ORIGINS__?: readonly string[];
     __ITERA_EMBEDDED_INSPECTOR_SELECTION__?: {
       getComponentPathForElement?: (
         element: Element,
@@ -1485,6 +1487,10 @@ const normalizeTrustedHostOrigins = (origins: readonly string[]) => {
   const normalizedOrigins = new Set<string>();
 
   for (const origin of origins) {
+    if (typeof origin !== 'string') {
+      continue;
+    }
+
     const normalizedOrigin = normalizeOrigin(origin.trim());
 
     if (
@@ -1497,6 +1503,16 @@ const normalizeTrustedHostOrigins = (origins: readonly string[]) => {
   }
 
   return [...normalizedOrigins];
+};
+
+const areSameTrustedHostOrigins = (
+  firstOrigins: readonly string[],
+  secondOrigins: readonly string[],
+) => {
+  return (
+    firstOrigins.length === secondOrigins.length &&
+    firstOrigins.every((origin) => secondOrigins.includes(origin))
+  );
 };
 
 const getElementCaptureFailureStatus = (
@@ -3960,13 +3976,52 @@ export const bootIterationInspectorRuntime = (
     return null;
   }
 
-  if (window.__ITERA_ITERATION_INSPECTOR_RUNTIME__ !== undefined) {
-    return window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+  const trustedHostOrigins = resolveIterationInspectorRuntimeHostOrigins(
+    args.hostOrigins,
+  );
+
+  if (trustedHostOrigins === null) {
+    return null;
+  }
+  const existingRuntime = window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+  const existingTrustedHostOrigins =
+    window.__ITERA_ITERATION_INSPECTOR_RUNTIME_HOST_ORIGINS__ ?? [];
+
+  if (existingRuntime !== undefined) {
+    if (
+      existingTrustedHostOrigins.length > 0 &&
+      trustedHostOrigins.length > 0 &&
+      !areSameTrustedHostOrigins(
+        existingTrustedHostOrigins,
+        trustedHostOrigins,
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      existingTrustedHostOrigins.length === 0 &&
+      trustedHostOrigins.length > 0
+    ) {
+      existingRuntime.stop();
+
+      if (window.__ITERA_ITERATION_INSPECTOR_RUNTIME__ === existingRuntime) {
+        delete window.__ITERA_ITERATION_INSPECTOR_RUNTIME__;
+      }
+    } else {
+      return existingRuntime;
+    }
   }
 
-  const runtime = createIterationInspectorRuntime(args);
+  const runtime = createIterationInspectorRuntime({
+    ...args,
+    hostOrigins: trustedHostOrigins,
+  });
   runtime.start();
   window.__ITERA_ITERATION_INSPECTOR_RUNTIME__ = runtime;
+  window.__ITERA_ITERATION_INSPECTOR_RUNTIME_HOST_ORIGINS__ = Object.freeze([
+    ...trustedHostOrigins,
+  ]);
 
   return runtime;
 };

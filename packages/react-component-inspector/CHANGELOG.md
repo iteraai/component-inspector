@@ -1,5 +1,11 @@
 # @iteraai/react-component-inspector
 
+## 0.5.3
+
+### Patch Changes
+
+- fc0f970: Configure trusted iteration-runtime origins from bridge bootstrap and safely reconcile duplicate runtime bootstraps.
+
 ## 0.5.2
 
 ### Patch Changes
